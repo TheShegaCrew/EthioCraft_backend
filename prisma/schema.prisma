@@ -1,0 +1,475 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  CUSTOMER
+  ARTISAN
+  ADMIN
+  VERIFICATION_AGENT
+}
+
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+}
+
+enum ArtisanVerificationStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum DraftStatus {
+  DRAFT
+  SUBMITTED
+  APPROVED
+  REJECTED
+}
+
+enum ProductStatus {
+  APPROVED
+  PUBLISHED
+  ARCHIVED
+}
+
+enum OrderStatus {
+  PENDING_PAYMENT
+  PAID
+  PROCESSING
+  SHIPPED
+  DELIVERED
+  CANCELLED
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCESS
+  FAILED
+  REFUNDED
+}
+
+enum PaymentProvider {
+  TELEBIRR
+  CHAPA
+  SIMULATION
+}
+
+enum WebhookProcessingStatus {
+  RECEIVED
+  PROCESSED
+  FAILED
+  IGNORED
+}
+
+enum ChatSessionStatus {
+  OPEN
+  CLOSED
+  ARCHIVED
+}
+
+enum ChatMessageRole {
+  SYSTEM
+  USER
+  ASSISTANT
+}
+
+enum ReportType {
+  SALES_SUMMARY
+  ORDER_PERFORMANCE
+  PRODUCT_VERIFICATION
+  ARTISAN_PERFORMANCE
+}
+
+enum ReportStatus {
+  QUEUED
+  RUNNING
+  COMPLETED
+  FAILED
+}
+
+enum AuditAction {
+  APPROVE_PRODUCT
+  REJECT_PRODUCT
+  PUBLISH_PRODUCT
+  UPDATE_ORDER_STATUS
+  PAYMENT_CONFIRMATION
+  GENERATE_REPORT
+  OTHER
+}
+
+enum NotificationType {
+  PRODUCT_APPROVED
+  PRODUCT_REJECTED
+  ORDER_PLACED
+  ORDER_SHIPPED
+  PAYMENT_SUCCESS
+  PAYMENT_FAILED
+  GENERAL
+}
+
+enum MediaOwnerType {
+  PRODUCT_DRAFT
+  PRODUCT
+  USER
+}
+
+enum MediaKind {
+  IMAGE
+  DOCUMENT
+  AVATAR
+}
+
+model User {
+  id                  String          @id @default(cuid())
+  firstName           String
+  lastName            String
+  email               String          @unique
+  phone               String?         @unique
+  passwordHash        String
+  role                UserRole
+  status              UserStatus      @default(ACTIVE)
+  avatarUrl           String?
+  isEmailVerified     Boolean         @default(false)
+  createdAt           DateTime        @default(now())
+  updatedAt           DateTime        @updatedAt
+  artisanProfile      ArtisanProfile?
+  addresses           Address[]
+  productDrafts       ProductDraft[]  @relation("ArtisanDrafts")
+  reviewedDrafts      ProductDraft[]  @relation("DraftReviewedBy")
+  products            Product[]       @relation("ArtisanProducts")
+  verifiedProducts    Product[]       @relation("ProductsVerifiedBy")
+  customerOrders      Order[]         @relation("CustomerOrders")
+  payments            Payment[]       @relation("CustomerPayments")
+  notifications       Notification[]
+  reviews             Review[]        @relation("CustomerReviews")
+  orderItemsAsArtisan OrderItem[]     @relation("OrderItemArtisan")
+  media               Media[]         @relation("UserMedia")
+  chatSessions        ChatSession[]
+  reportJobs          ReportJob[]
+  adminAuditLogs      AdminAuditLog[] @relation("AuditActor")
+
+  @@map("users")
+}
+
+model ArtisanProfile {
+  id                 String                    @id @default(cuid())
+  userId             String                    @unique
+  shopName           String
+  bio                String?
+  region             String?
+  city               String?
+  culturalMetadata   Json?
+  extensionData      Json?
+  verificationStatus ArtisanVerificationStatus @default(PENDING)
+  createdAt          DateTime                  @default(now())
+  updatedAt          DateTime                  @updatedAt
+  user               User                      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([shopName])
+  @@map("artisans")
+}
+
+model Address {
+  id            String   @id @default(cuid())
+  userId        String
+  label         String?
+  recipientName String
+  phone         String
+  region        String
+  city          String
+  subCity       String?
+  woreda        String?
+  kebele        String?
+  line1         String
+  line2         String?
+  postalCode    String?
+  isDefault     Boolean  @default(false)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  orders        Order[]  @relation("ShippingAddressOrders")
+
+  @@index([userId])
+  @@map("addresses")
+}
+
+model ProductDraft {
+  id                String      @id @default(cuid())
+  artisanId         String
+  title             String
+  description       String
+  category          String
+  price             Decimal     @db.Decimal(10, 2)
+  currency          String      @default("ETB")
+  stock             Int
+  materials         String[]    @default([])
+  tags              String[]    @default([])
+  dimensions        Json?
+  culturalMetadata  Json?
+  extensionData     Json?
+  status            DraftStatus @default(DRAFT)
+  submissionNotes   String?
+  verificationNotes String?
+  submittedAt       DateTime?
+  reviewedAt        DateTime?
+  reviewedById      String?
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+  artisan           User        @relation("ArtisanDrafts", fields: [artisanId], references: [id], onDelete: Cascade)
+  reviewer          User?       @relation("DraftReviewedBy", fields: [reviewedById], references: [id])
+  media             Media[]     @relation("DraftMedia")
+  product           Product?
+
+  @@index([artisanId, status])
+  @@index([status, createdAt])
+  @@map("product_drafts")
+}
+
+model Product {
+  id               String        @id @default(cuid())
+  artisanId        String
+  draftId          String        @unique
+  title            String
+  slug             String        @unique
+  description      String
+  category         String
+  price            Decimal       @db.Decimal(10, 2)
+  currency         String        @default("ETB")
+  stock            Int
+  materials        String[]      @default([])
+  tags             String[]      @default([])
+  dimensions       Json?
+  culturalMetadata Json?
+  extensionData    Json?
+  status           ProductStatus @default(APPROVED)
+  approvedAt       DateTime?
+  publishedAt      DateTime?
+  verifiedById     String?
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+  artisan          User          @relation("ArtisanProducts", fields: [artisanId], references: [id], onDelete: Cascade)
+  draft            ProductDraft  @relation(fields: [draftId], references: [id], onDelete: Cascade)
+  verifier         User?         @relation("ProductsVerifiedBy", fields: [verifiedById], references: [id])
+  media            Media[]       @relation("ProductMedia")
+  orderItems       OrderItem[]
+  reviews          Review[]
+
+  @@index([status, category])
+  @@index([artisanId, status])
+  @@map("products")
+}
+
+model Media {
+  id        String         @id @default(cuid())
+  ownerType MediaOwnerType
+  kind      MediaKind      @default(IMAGE)
+  draftId   String?
+  productId String?
+  userId    String?
+  url       String
+  mimeType  String?
+  size      Int?
+  altText   String?
+  sortOrder Int            @default(0)
+  createdAt DateTime       @default(now())
+  draft     ProductDraft?  @relation("DraftMedia", fields: [draftId], references: [id], onDelete: Cascade)
+  product   Product?       @relation("ProductMedia", fields: [productId], references: [id], onDelete: Cascade)
+  user      User?          @relation("UserMedia", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([draftId, sortOrder])
+  @@index([productId, sortOrder])
+  @@index([userId, sortOrder])
+  @@map("media")
+}
+
+model Order {
+  id              String      @id @default(cuid())
+  customerId      String
+  addressId       String
+  status          OrderStatus @default(PENDING_PAYMENT)
+  subtotalAmount  Decimal     @db.Decimal(10, 2)
+  shippingFee     Decimal     @default(0) @db.Decimal(10, 2)
+  taxAmount       Decimal     @default(0) @db.Decimal(10, 2)
+  totalAmount     Decimal     @db.Decimal(10, 2)
+  currency        String      @default("ETB")
+  notes           String?
+  paidAt          DateTime?
+  shippedAt       DateTime?
+  deliveredAt     DateTime?
+  cancelledAt     DateTime?
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+  customer        User        @relation("CustomerOrders", fields: [customerId], references: [id], onDelete: Cascade)
+  shippingAddress Address     @relation("ShippingAddressOrders", fields: [addressId], references: [id])
+  items           OrderItem[]
+  payments        Payment[]
+
+  @@index([customerId, createdAt])
+  @@index([status, createdAt])
+  @@map("orders")
+}
+
+model OrderItem {
+  id          String   @id @default(cuid())
+  orderId     String
+  productId   String
+  artisanId   String
+  productName String
+  unitPrice   Decimal  @db.Decimal(10, 2)
+  quantity    Int
+  lineTotal   Decimal  @db.Decimal(10, 2)
+  createdAt   DateTime @default(now())
+  order       Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product     Product  @relation(fields: [productId], references: [id])
+  artisan     User     @relation("OrderItemArtisan", fields: [artisanId], references: [id])
+
+  @@index([orderId])
+  @@index([artisanId])
+  @@map("order_items")
+}
+
+model Payment {
+  id                String                @id @default(cuid())
+  orderId           String
+  customerId        String
+  provider          PaymentProvider
+  status            PaymentStatus         @default(PENDING)
+  amount            Decimal               @db.Decimal(10, 2)
+  currency          String                @default("ETB")
+  txRef             String                @unique
+  checkoutReference String?
+  paidAt            DateTime?
+  failureReason     String?
+  providerPayload   Json?
+  createdAt         DateTime              @default(now())
+  updatedAt         DateTime              @updatedAt
+  order             Order                 @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  customer          User                  @relation("CustomerPayments", fields: [customerId], references: [id], onDelete: Cascade)
+  webhookEvents     PaymentWebhookEvent[]
+
+  @@index([orderId, status])
+  @@index([customerId, createdAt])
+  @@map("payments")
+}
+
+model Review {
+  id         String   @id @default(cuid())
+  productId  String
+  customerId String
+  rating     Int
+  title      String?
+  comment    String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  product    Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  customer   User     @relation("CustomerReviews", fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@unique([productId, customerId])
+  @@index([productId, createdAt])
+  @@map("reviews")
+}
+
+model Notification {
+  id        String           @id @default(cuid())
+  userId    String
+  type      NotificationType
+  title     String
+  message   String
+  metadata  Json?
+  isRead    Boolean          @default(false)
+  readAt    DateTime?
+  createdAt DateTime         @default(now())
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, isRead, createdAt])
+  @@map("notifications")
+}
+
+model PaymentWebhookEvent {
+  id          String                  @id @default(cuid())
+  paymentId   String?
+  provider    PaymentProvider
+  eventType   String
+  txRef       String?
+  signature   String?
+  payload     Json
+  status      WebhookProcessingStatus @default(RECEIVED)
+  error       String?
+  receivedAt  DateTime                @default(now())
+  processedAt DateTime?
+  payment     Payment?                @relation(fields: [paymentId], references: [id], onDelete: SetNull)
+
+  @@index([provider, receivedAt])
+  @@index([txRef])
+  @@map("payment_webhook_events")
+}
+
+model ChatSession {
+  id        String            @id @default(cuid())
+  userId    String
+  title     String?
+  status    ChatSessionStatus @default(OPEN)
+  context   Json?
+  createdAt DateTime          @default(now())
+  updatedAt DateTime          @updatedAt
+  user      User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages  ChatMessage[]
+
+  @@index([userId, createdAt])
+  @@map("chat_sessions")
+}
+
+model ChatMessage {
+  id        String          @id @default(cuid())
+  sessionId String
+  role      ChatMessageRole
+  content   String
+  metadata  Json?
+  tokens    Int?
+  createdAt DateTime        @default(now())
+  session   ChatSession     @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId, createdAt])
+  @@map("chat_messages")
+}
+
+model ReportJob {
+  id            String       @id @default(cuid())
+  requestedById String
+  type          ReportType
+  status        ReportStatus @default(QUEUED)
+  filters       Json?
+  result        Json?
+  errorMessage  String?
+  startedAt     DateTime?
+  completedAt   DateTime?
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+  requestedBy   User         @relation(fields: [requestedById], references: [id], onDelete: Cascade)
+
+  @@index([requestedById, createdAt])
+  @@index([type, status, createdAt])
+  @@map("report_jobs")
+}
+
+model AdminAuditLog {
+  id          String      @id @default(cuid())
+  actorId     String?
+  action      AuditAction
+  entityType  String
+  entityId    String?
+  description String
+  metadata    Json?
+  createdAt   DateTime    @default(now())
+  actor       User?       @relation("AuditActor", fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([action, createdAt])
+  @@index([actorId, createdAt])
+  @@map("admin_audit_logs")
+}

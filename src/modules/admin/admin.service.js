@@ -1,0 +1,201 @@
+const prisma = require("../../config/prisma");
+const ApiError = require("../../utils/apiError");
+const { getPagination } = require("../../utils/pagination");
+const adminRepository = require("./admin.repository");
+
+function decimalToNumber(value) {
+  return value === null || value === undefined ? 0 : Number(value);
+}
+
+function parseDateRange(query = {}) {
+  const fallbackFrom = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+  const dateFrom = query.dateFrom ? new Date(query.dateFrom) : fallbackFrom;
+  const dateTo = query.dateTo ? new Date(query.dateTo) : new Date();
+
+  if (Number.isNaN(dateFrom.getTime()) || Number.isNaN(dateTo.getTime())) {
+    throw new ApiError(400, "Invalid date range.");
+  }
+
+  if (dateFrom > dateTo) {
+    throw new ApiError(400, "dateFrom cannot be after dateTo.");
+  }
+
+  return { dateFrom, dateTo };
+}
+
+function mapCountRows(rows) {
+  return rows.map((row) => ({
+    key: Object.values(row)[0],
+    count: row._count._all,
+  }));
+}
+
+async function getDashboardOverview(query) {
+  const { dateFrom, dateTo } = parseDateRange(query);
+
+  const [usersByRole, productsByStatus, draftsByStatus, ordersByStatus, revenue, aiUsage] = await Promise.all([
+    adminRepository.listUsersByRole(),
+    adminRepository.listProductsByStatus(),
+    adminRepository.listDraftsByStatus(),
+    adminRepository.listOrdersByStatus(dateFrom, dateTo),
+    adminRepository.aggregateRevenue(dateFrom, dateTo),
+    Promise.all([
+      prisma.chatSession.count({
+        where: {
+          createdAt: {
+            gte: dateFrom,
+            lte: dateTo,
+          },
+        },
+      }),
+      prisma.reportJob.count({
+        where: {
+          createdAt: {
+            gte: dateFrom,
+            lte: dateTo,
+          },
+        },
+      }),
+    ]),
+  ]);
+
+  return {
+    range: {
+      from: dateFrom,
+      to: dateTo,
+    },
+    users: mapCountRows(usersByRole),
+    products: mapCountRows(productsByStatus),
+    drafts: mapCountRows(draftsByStatus),
+    orders: mapCountRows(ordersByStatus),
+    revenue: {
+      successfulPayments: revenue._count._all,
+      amount: decimalToNumber(revenue._sum.amount),
+    },
+    aiUsage: {
+      chatSessions: aiUsage[0],
+      reportJobs: aiUsage[1],
+    },
+    futureExtensions: {
+      riskAlerts: null,
+      artisanCohortHealth: null,
+    },
+  };
+}
+
+async function getDashboardRevenue(query) {
+  const { dateFrom, dateTo } = parseDateRange(query);
+  const [aggregate, payments] = await Promise.all([
+    adminRepository.aggregateRevenue(dateFrom, dateTo),
+    adminRepository.listRevenuePayments(dateFrom, dateTo),
+  ]);
+
+  const byDayMap = new Map();
+  const byProviderMap = new Map();
+
+  for (const payment of payments) {
+    const day = payment.createdAt.toISOString().slice(0, 10);
+    byDayMap.set(day, (byDayMap.get(day) || 0) + decimalToNumber(payment.amount));
+
+    const providerKey = payment.provider;
+    if (!byProviderMap.has(providerKey)) {
+      byProviderMap.set(providerKey, { provider: providerKey, amount: 0, count: 0 });
+    }
+
+    const providerItem = byProviderMap.get(providerKey);
+    providerItem.amount += decimalToNumber(payment.amount);
+    providerItem.count += 1;
+  }
+
+  return {
+    range: {
+      from: dateFrom,
+      to: dateTo,
+    },
+    totals: {
+      successfulPayments: aggregate._count._all,
+      amount: decimalToNumber(aggregate._sum.amount),
+    },
+    byProvider: [...byProviderMap.values()].sort((a, b) => b.amount - a.amount),
+    byDay: [...byDayMap.entries()].map(([day, amount]) => ({ day, amount })),
+    futureExtensions: {
+      anomalyDetection: null,
+      exchangeRateImpact: null,
+    },
+  };
+}
+
+async function getVerificationQueue(query) {
+  const limit = Math.min(Math.max(Number.parseInt(query.limit, 10) || 20, 1), 100);
+  const pending = await adminRepository.listPendingVerifications(limit);
+
+  return {
+    count: pending.length,
+    items: pending,
+    futureExtensions: {
+      aiImageQualityScore: null,
+      reviewerLoadBalancing: null,
+    },
+  };
+}
+
+async function getRecentOrders(query) {
+  const limit = Math.min(Math.max(Number.parseInt(query.limit, 10) || 20, 1), 100);
+  const orders = await adminRepository.listRecentOrders(limit);
+
+  return {
+    items: orders,
+  };
+}
+
+async function getTopArtisans(query) {
+  const { dateFrom, dateTo } = parseDateRange(query);
+  const limit = Math.min(Math.max(Number.parseInt(query.limit, 10) || 10, 1), 50);
+
+  const groups = await adminRepository.groupTopArtisans(dateFrom, dateTo, limit);
+  const artisans = await adminRepository.listArtisansByIds(groups.map((group) => group.artisanId));
+  const artisanById = new Map(artisans.map((artisan) => [artisan.id, artisan]));
+
+  return {
+    range: {
+      from: dateFrom,
+      to: dateTo,
+    },
+    items: groups.map((group) => ({
+      artisanId: group.artisanId,
+      artisan: artisanById.get(group.artisanId) || null,
+      revenue: decimalToNumber(group._sum.lineTotal),
+      unitsSold: decimalToNumber(group._sum.quantity),
+      orderItems: group._count._all,
+    })),
+  };
+}
+
+async function getAuditLogs(query) {
+  const pagination = getPagination(query);
+  const [items, total] = await Promise.all([adminRepository.listAuditLogs(pagination), adminRepository.countAuditLogs()]);
+
+  return {
+    items,
+    meta: {
+      page: pagination.page,
+      limit: pagination.limit,
+      total,
+      totalPages: Math.ceil(total / pagination.limit) || 1,
+    },
+  };
+}
+
+function createAuditLog(payload) {
+  return adminRepository.createAuditLog(payload);
+}
+
+module.exports = {
+  getDashboardOverview,
+  getDashboardRevenue,
+  getVerificationQueue,
+  getRecentOrders,
+  getTopArtisans,
+  getAuditLogs,
+  createAuditLog,
+};
