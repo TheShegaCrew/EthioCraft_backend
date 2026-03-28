@@ -1,7 +1,9 @@
 const prisma = require("../../config/prisma");
 const ApiError = require("../../utils/apiError");
 const aiRepository = require("./ai.repository");
-
+const {generate, estimateTokens} = require("./llmUtils");
+const { SYSTEM_PROMPTS, BLOCKED_PATTERNS, INTENT_CLASSIFICATION_PROMPT } = require("./ai.constants");
+const { de } = require("zod/v4/locales");
 const SUCCESS_ORDER_STATUSES = ["PAID", "PROCESSING", "SHIPPED", "DELIVERED"];
 
 function decimalToNumber(value) {
@@ -33,19 +35,125 @@ function assertSessionAccess(user, session) {
     throw new ApiError(404, "Chat session was not found.");
   }
 }
-
-function buildAssistantReply(message, user) {
-  const text = message.toLowerCase();
-
-  if (text.includes("order")) {
-    return {
-      intent: "ORDER_ASSISTANCE",
-      content:
-        "I can help with your order. Share your order ID and I will guide you through status tracking, delivery milestones, and any next action.",
-    };
+function buildFallbackReply(message, user, intent) {
+  const name = user?.firstName || 'there';
+  const replies = {
+    ORDER_ASSISTANCE: `Hi ${name}, I can help with your order. Please share your order ID and I'll look up the status, delivery timeline, and any required actions.`,
+    PAYMENT_ASSISTANCE: `Hi ${name}, for payment issues please confirm your provider (TeleBirr or Chapa) and reference number. Common fixes include retrying the payment, checking your balance, or verifying the phone number on file.`,
+    PRODUCT_HELP: `Hi ${name}, for product listing or verification, make sure you have: ✅ Clear product photos ✅ Cultural origin and craftsmanship details ✅ Accurate pricing in ETB. I can walk you through each step.`,
+    ACCOUNT_HELP: `Hi ${name}, for account issues you can reset your password from the login page or update your profile in Settings. If you're locked out, contact support@ethiocraft.com.`,
+    PLATFORM_INFO: `Hi ${name}, EthioCraft connects Ethiopian artisans with global buyers. Sellers can list handcrafted products, and buyers can purchase with TeleBirr or Chapa. Visit our FAQ for detailed platform policies.`,
+    GREETING: `Selam ${name}! 👋 Welcome to EthioCraft. How can I help you today?`,
+    GENERAL_SUPPORT: `Thanks ${name}! I'm here to help with orders, payments, products, or any marketplace questions. Could you tell me a bit more about what you need?`,
+  };
+  return replies[intent] || replies.GENERAL_SUPPORT;
+}
+async function classifyIntent(message) {
+  try {
+    const prompt = INTENT_CLASSIFICATION_PROMPT.replace('{message}', message.slice(0, 300));
+    const { text } = await generate(prompt, {
+      temperature: 0.1,
+      max_new_tokens: 20,
+    });
+    const validIntents = [
+      'ORDER_ASSISTANCE',
+      'PAYMENT_ASSISTANCE',
+      'PRODUCT_HELP',
+      'ACCOUNT_HELP',
+      'PLATFORM_INFO',
+      'GREETING',
+      'GENERAL_SUPPORT',
+    ];
+    const cleaned = text.toUpperCase().trim().replace(/[^A-Z_]/g, '');
+    return validIntents.includes(cleaned) ? cleaned : 'GENERAL_SUPPORT';
+  } catch {
+    // If intent classification fails, don't block the response
+    return 'GENERAL_SUPPORT';
   }
-
-  if (text.includes("payment") || text.includes("telebirr") || text.includes("chapa")) {
+}
+function buildConversationPrompt({ systemPrompt, history, currentMessage, maxContextTokens = 2000 }) {
+  const messageParts = [];
+  let tokenBudget = maxContextTokens;
+  // Always include the current message
+  const currentPart = `User: ${currentMessage}`;
+  tokenBudget -= estimateTokens(currentPart);
+  // Walk history backwards, adding recent messages first
+  for (let i = history.length - 1; i >= 0 && tokenBudget > 0; i--) {
+    const msg = history[i];
+    const formatted =
+      msg.role === 'USER' ? `User: ${msg.content}` : `Assistant: ${msg.content}`;
+    const tokens = estimateTokens(formatted);
+    if (tokens > tokenBudget) break;
+    tokenBudget -= tokens;
+    messageParts.unshift(formatted);
+  }
+  return [
+    `### System\n${systemPrompt}`,
+    '',
+    '### Conversation',
+    ...messageParts,
+    currentPart,
+    '',
+    'Assistant:',
+  ].join('\n');
+}
+function validateResponse(text) {
+  if (!text || text.length < 2) {
+    return { valid: false, reason: 'Response too short' };
+  }
+  if (text.length > 3000) {
+    return { valid: false, reason: 'Response too long' };
+  }
+  for (const pattern of BLOCKED_PATTERNS) {
+    if (pattern.test(text)) {
+      return { valid: false, reason: 'Response contains blocked content' };
+    }
+  }
+  return { valid: true };
+}
+function detectLanguage(text) {
+  // Simple Amharic detection via Unicode Ethiopic range (U+1200–U+137F)
+  const ethiopicChars = (text.match(/[\u1200-\u137F]/g) || []).length;
+  const ratio = ethiopicChars / Math.max(text.length, 1);
+  if (ratio > 0.3) return 'am'; // Amharic
+  return 'en';
+}
+async function generateLLMResponse(message, user, conversationHistory = []) {
+  const lang = detectLanguage(message);
+  const intent = await classifyIntent(message);
+  // Pick system prompt based on user role
+  const role = user?.role?.toLowerCase() || 'default';
+  let systemPrompt = SYSTEM_PROMPTS[role] || SYSTEM_PROMPTS.default;
+  // Add language hint
+  if (lang === 'am') {
+    systemPrompt += '\n- The user is writing in Amharic. Respond in Amharic.';
+  }
+  // Build multi-turn prompt
+  const fullPrompt = buildConversationPrompt({
+    systemPrompt,
+    history: conversationHistory,
+    currentMessage: message,
+    maxContextTokens: 2000,
+  });
+  try {
+    const result = await generate(fullPrompt, {
+      temperature: 0.7,
+      max_new_tokens: 300,
+    });
+    // Validate response
+    const validation = validateResponse(result.text);
+    if (!validation.valid) {
+      console.warn(`[AI] Response failed validation: ${validation.reason}`);
+      const fallback = buildFallbackReply(message, user, intent);
+      return {
+        content: fallback,
+        intent,
+        source: 'GUARDRAIL_FALLBACK',
+        language: lang,
+        model: result.model,
+        latencyMs: result.latencyMs,
+      };
+    }
     return {
       intent: "PAYMENT_ASSISTANCE",
       content:
@@ -526,5 +634,8 @@ module.exports = {
   createReportJob,
   listReportJobs,
   getReportJob,
+  classifyIntent, // Exported for testing
+  generateLLMResponse, // Exported for testing
+  detectLanguage, // Exported for testing
 };
 
