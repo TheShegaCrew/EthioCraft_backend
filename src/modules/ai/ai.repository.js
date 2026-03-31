@@ -6,6 +6,7 @@ function createChatSession(userId, data) {
       userId,
       title: data.title || null,
       context: data.context || null,
+      metadata: data.metadata || null,
     },
     include: {
       messages: {
@@ -56,6 +57,16 @@ function createChatMessage(sessionId, data) {
       metadata: data.metadata || null,
       tokens: data.tokens || null,
     },
+  });
+}
+
+function getRecentMessages(sessionId, { limit = 10 } = {}) {
+  return prisma.chatMessage.findMany({
+    where: { sessionId },
+    orderBy: {
+      createdAt: "desc",
+    },
+    take: limit,
   });
 }
 
@@ -139,6 +150,7 @@ module.exports = {
   listChatSessions,
   findChatSessionById,
   createChatMessage,
+  getRecentMessages,
   updateChatSession,
   createReportJob,
   updateReportJob,

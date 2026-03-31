@@ -1,4 +1,5 @@
 const express = require("express");
+const { authenticate } = require("../middlewares/auth.middleware");
 const authRoutes = require("../modules/auth/auth.routes");
 const userRoutes = require("../modules/users/user.routes");
 const productRoutes = require("../modules/products/product.routes");
@@ -11,14 +12,19 @@ const adminRoutes = require("../modules/admin/admin.routes");
 
 const router = express.Router();
 
+// Public Routes
 router.use("/auth", authRoutes);
-router.use("/users", userRoutes);
-router.use("/", productRoutes);
 router.use("/marketplace", marketplaceRoutes);
-router.use("/orders", orderRoutes);
-router.use("/payments", paymentRoutes);
-router.use("/notifications", notificationRoutes);
-router.use("/ai", aiRoutes);
-router.use("/admin", adminRoutes);
+
+// Protected Routes
+router.use("/users", authenticate, userRoutes);
+router.use("/orders", authenticate, orderRoutes);
+router.use("/payments", authenticate, paymentRoutes);
+router.use("/notifications", authenticate, notificationRoutes);
+router.use("/ai", authenticate, aiRoutes);
+router.use("/admin", authenticate, adminRoutes);
+
+// Public Root/Fallback Routes
+router.use("/", productRoutes);
 
 module.exports = router;

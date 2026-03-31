@@ -3,7 +3,6 @@ const ApiError = require("../../utils/apiError");
 const aiRepository = require("./ai.repository");
 const {generate, estimateTokens} = require("./llmUtils");
 const { SYSTEM_PROMPTS, BLOCKED_PATTERNS, INTENT_CLASSIFICATION_PROMPT } = require("./ai.constants");
-const { de } = require("zod/v4/locales");
 const SUCCESS_ORDER_STATUSES = ["PAID", "PROCESSING", "SHIPPED", "DELIVERED"];
 
 function decimalToNumber(value) {
@@ -14,11 +13,11 @@ function parseDateRange(filters = {}) {
   const defaultDateFrom = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
   const dateFrom = filters.dateFrom ? new Date(filters.dateFrom) : defaultDateFrom;
   const dateTo = filters.dateTo ? new Date(filters.dateTo) : new Date();
-
+  
   if (Number.isNaN(dateFrom.getTime()) || Number.isNaN(dateTo.getTime())) {
     throw new ApiError(400, "Invalid report date range.");
   }
-
+  
   if (dateFrom > dateTo) {
     throw new ApiError(400, "dateFrom cannot be after dateTo.");
   }
@@ -155,46 +154,38 @@ async function generateLLMResponse(message, user, conversationHistory = []) {
       };
     }
     return {
-      intent: "PAYMENT_ASSISTANCE",
-      content:
-        "For payment help, confirm your provider (TeleBirr or Chapa) and payment reference. I can then suggest retry, verification, or webhook reconciliation steps.",
+      content: result.text,
+      intent,
+      source: result.cached ? 'LLM_CACHED' : 'LLM',
+      language: lang,
+      model: result.model,
+      latencyMs: result.latencyMs,
     };
-  }
-
-  if (text.includes("product") || text.includes("verify") || text.includes("approval")) {
+  } catch (llmErr) {
+    console.warn('[AI] LLM call failed, using context-aware fallback:', llmErr.message);
+    const fallback = buildFallbackReply(message, user, intent);
     return {
-      intent: "PRODUCT_VERIFICATION",
-      content:
-        "For product verification, ensure your draft has images, cultural metadata, and clear craftsmanship notes before submission. I can suggest a checklist for your next draft.",
+      content: fallback,
+      intent,
+      source: 'RULE_FALLBACK',
+      language: lang,
+      error: llmErr.message,
+      latencyMs: 0,
     };
   }
-
-  return {
-    intent: "GENERAL_SUPPORT",
-    content: `Thanks ${user.firstName || "there"}. This AI response is currently scaffolded; connect your LLM provider to generate richer multilingual support answers.`,
-  };
 }
 
-async function createChatSession(userId, payload) {
-  const session = await aiRepository.createChatSession(userId, payload);
-
-  await aiRepository.createChatMessage(session.id, {
-    role: "SYSTEM",
-    content: "You are the EthioCraft marketplace assistant. Keep responses concise, practical, and culturally respectful.",
+async function createChatSession(user, data = {}) {
+  return aiRepository.createChatSession(user.id, {
+    title: data.title || 'New conversation',
     metadata: {
-      provider: "SCAFFOLD",
-      note: "Replace with production LLM orchestration.",
+      userRole: user.role,
+      createdVia: data.source || 'web',
     },
   });
-
-  return aiRepository.findChatSessionById(session.id);
 }
 
 async function listChatSessions(user) {
-  if (user.role === "ADMIN") {
-    return aiRepository.listChatSessions(user.id);
-  }
-
   return aiRepository.listChatSessions(user.id);
 }
 
@@ -202,6 +193,12 @@ async function getChatSession(user, sessionId) {
   const session = await aiRepository.findChatSessionById(sessionId);
   assertSessionAccess(user, session);
   return session;
+}
+
+async function closeChatSession(user, sessionId) {
+  const session = await aiRepository.findChatSessionById(sessionId);
+  assertSessionAccess(user, session);
+  return aiRepository.updateChatSession(sessionId, { status: 'CLOSED', closedAt: new Date() });
 }
 
 async function createChatMessage(user, sessionId, message) {
@@ -212,24 +209,44 @@ async function createChatMessage(user, sessionId, message) {
     throw new ApiError(409, "Chat session is not open for new messages.");
   }
 
-  await aiRepository.createChatMessage(sessionId, {
+  const userMsg = await aiRepository.createChatMessage(sessionId, {
     role: "USER",
     content: message,
   });
 
-  const assistantReply = buildAssistantReply(message, user);
-  await aiRepository.createChatMessage(sessionId, {
-    role: "ASSISTANT",
-    content: assistantReply.content,
+   // 3. Load conversation history for context
+  const history = await aiRepository.getRecentMessages(sessionId, { limit: 10 });
+  // 4. Generate response (LLM with smart fallback)
+  const response = await generateLLMResponse(message, user, history);
+  // 5. Save assistant message with rich metadata
+  const assistantMsg = await aiRepository.createChatMessage(sessionId, {
+    role: 'ASSISTANT',
+    content: response.content,
+    tokens: estimateTokens(response.content),
     metadata: {
-      intent: assistantReply.intent,
-      mode: "RULE_BASED_PLACEHOLDER",
+      source: response.source,
+      intent: response.intent,
+      language: response.language,
+      model: response.model,
+      latencyMs: response.latencyMs,
+      ...(response.error && { fallbackReason: response.error }),
     },
   });
 
-  return aiRepository.updateChatSession(sessionId, {
-    title: session.title || message.slice(0, 80),
+const updatedSession = await aiRepository.updateChatSession(sessionId, {
+    title: session.title === 'New conversation' ? message.slice(0, 80) : session.title,
+    lastMessageAt: new Date(),
+    metadata: {
+      ...session.metadata,
+      messageCount: (session.metadata?.messageCount || 0) + 2,
+      lastIntent: response.intent,
+    },
   });
+  return {
+    session: updatedSession,
+    userMessage: userMsg,
+    assistantMessage: assistantMsg,
+  };
 }
 
 async function generateSalesSummary(filters, artisanId) {
@@ -525,20 +542,15 @@ async function generateArtisanPerformance(filters, artisanId) {
 }
 
 async function generateReportData(type, filters, artisanId) {
-  if (type === "SALES_SUMMARY") {
-    return generateSalesSummary(filters, artisanId);
-  }
+  const reportMap = {
+    SALES_SUMMARY: generateSalesSummary,
+    ORDER_PERFORMANCE: generateOrderPerformance,
+    PRODUCT_VERIFICATION: generateVerificationReport,
+    ARTISAN_PERFORMANCE: generateArtisanPerformance,
+  };
 
-  if (type === "ORDER_PERFORMANCE") {
-    return generateOrderPerformance(filters, artisanId);
-  }
-
-  if (type === "PRODUCT_VERIFICATION") {
-    return generateVerificationReport(filters, artisanId);
-  }
-
-  if (type === "ARTISAN_PERFORMANCE") {
-    return generateArtisanPerformance(filters, artisanId);
+  if (reportMap[type]) {
+    return reportMap[type](filters, artisanId);
   }
 
   throw new ApiError(400, "Unsupported report type.");
@@ -563,13 +575,9 @@ async function createReportJob(user, payload) {
   const job = await aiRepository.createReportJob({
     requestedById: user.id,
     type: payload.type,
-    status: "QUEUED",
-    filters,
-  });
-
-  await aiRepository.updateReportJob(job.id, {
     status: "RUNNING",
     startedAt: new Date(),
+    filters,
   });
 
   try {
@@ -630,6 +638,7 @@ module.exports = {
   createChatSession,
   listChatSessions,
   getChatSession,
+  closeChatSession,
   createChatMessage,
   createReportJob,
   listReportJobs,
@@ -638,4 +647,3 @@ module.exports = {
   generateLLMResponse, // Exported for testing
   detectLanguage, // Exported for testing
 };
-

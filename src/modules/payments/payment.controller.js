@@ -1,5 +1,6 @@
 const asyncHandler = require("../../utils/asyncHandler");
 const paymentService = require("./payment.service");
+const paymentRepository = require("./payment.repository");
 
 const initializePayment = asyncHandler(async (req, res) => {
   const payment = await paymentService.initializePayment(req.user.id, req.validated.body);
@@ -46,10 +47,25 @@ const chapaWebhook = asyncHandler(async (req, res) => {
   });
 });
 
+const handleCallback = asyncHandler(async (req, res) => {
+  const { tx_ref } = req.query;
+  const payment = await paymentService.syncPaymentStatus(tx_ref);
+
+  if (!payment) {
+    return res.status(404).send("Payment not found");
+  }
+
+  if (payment.status === "SUCCESS") {
+    return res.redirect("/payments/success");
+  }
+  return res.redirect("/payments/failure");
+});
+
 module.exports = {
   initializePayment,
   getPayment,
   confirmPayment,
   telebirrWebhook,
   chapaWebhook,
+  handleCallback,
 };

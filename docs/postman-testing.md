@@ -32,7 +32,7 @@ Recommended variables:
 - `customerEmail` = `customer@ethiocraft.com`
 - `artisanEmail` = `artisan@ethiocraft.com`
 - `adminEmail` = `admin@ethiocraft.com`
-- `agentEmail` = `agent@ethiocraft.com`
+- `agentEmail` = `t.comagent@ethiocraf`
 - `password` = `Password123!`
 - `customerToken`
 - `artisanToken`
@@ -91,7 +91,7 @@ Save the returned `data.token` into the matching Postman environment variable.
 
 ## 7. Test the marketplace
 
-1. Call `GET {{baseUrl}}/marketplace/products` without any token.
+1. Call `GET {{baseUrl}}/marketplace/products` without any token.3
 2. Call `GET {{baseUrl}}/marketplace/products/{{productId}}`.
 3. Try filters like:
    - `{{baseUrl}}/marketplace/products?search=mesob`
@@ -114,11 +114,13 @@ Save the returned `data.token` into the matching Postman environment variable.
 4. Confirm payment with `POST {{baseUrl}}/payments/{{paymentId}}/confirm`.
 
 Successful confirmation body:
+    COPIED FROM POSTMAN
+////////CHAPA-1774381181949-3vvuh6
 
 ```json
 {
   "status": "SUCCESS",
-  "txRef": "<copied from initialize response>"
+  "txRef": "CHAPA-1774381181949-3vvuh6"
 }
 ```
 

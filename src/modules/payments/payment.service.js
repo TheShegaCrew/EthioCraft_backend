@@ -1,3 +1,4 @@
+const axios = require("axios");
 const prisma = require("../../config/prisma");
 const ApiError = require("../../utils/apiError");
 const notificationService = require("../notifications/notification.service");
@@ -8,6 +9,8 @@ const {
   extractWebhookSignature,
   validateWebhookSignature,
   parseWebhookPayload,
+  normalizePaymentStatus,
+  verifyProviderTransaction,
 } = require("./payment.providers");
 
 function canViewPayment(user, payment) {
@@ -22,6 +25,19 @@ async function createAuditLog(payload) {
   }
 }
 
+function validatePaymentDataIntegrity(payment) {
+  const orderAmount = Number(payment.order.totalAmount);
+  const paymentAmount = Number(payment.amount);
+
+  if (paymentAmount !== orderAmount) {
+    throw new ApiError(409, "Payment amount mismatch with order total.");
+  }
+
+  if (payment.currency !== payment.order.currency) {
+    throw new ApiError(409, "Payment currency mismatch with order currency.");
+  }
+}
+
 async function applyFailedPayment(payment, options = {}) {
   if (payment.status === "SUCCESS") {
     return paymentRepository.findPaymentById(payment.id);
@@ -31,7 +47,8 @@ async function applyFailedPayment(payment, options = {}) {
     status: "FAILED",
     failureReason: options.failureReason || "Payment failed.",
     providerPayload: options.providerPayload || payment.providerPayload || null,
-    checkoutReference: options.providerReference || payment.checkoutReference || null,
+    // Persist to existing Prisma field, but use providerTransactionId as service-level naming.
+    checkoutReference: options.providerTransactionId || payment.checkoutReference || null,
   });
 
   await notificationService.createNotification({
@@ -39,7 +56,11 @@ async function applyFailedPayment(payment, options = {}) {
     type: "PAYMENT_FAILED",
     title: "Payment failed",
     message: `Payment attempt for order ${payment.orderId} failed.`,
-    metadata: { orderId: payment.orderId, paymentId: payment.id, source: options.source || "UNKNOWN" },
+    metadata: {
+      orderId: payment.orderId,
+      paymentId: payment.id,
+      source: options.source || "UNKNOWN",
+    },
   });
 
   return failedPayment;
@@ -49,6 +70,8 @@ async function applySuccessfulPayment(payment, options = {}) {
   if (payment.order.status === "CANCELLED") {
     throw new ApiError(409, "Cancelled orders cannot receive payments.");
   }
+
+  validatePaymentDataIntegrity(payment);
 
   if (payment.status === "SUCCESS") {
     return paymentRepository.findPaymentById(payment.id);
@@ -64,7 +87,7 @@ async function applySuccessfulPayment(payment, options = {}) {
         paidAt: now,
         failureReason: null,
         providerPayload: options.providerPayload || payment.providerPayload || null,
-        checkoutReference: options.providerReference || payment.checkoutReference || null,
+        checkoutReference: options.providerTransactionId || payment.checkoutReference || null,
       },
     });
 
@@ -84,7 +107,11 @@ async function applySuccessfulPayment(payment, options = {}) {
         type: "PAYMENT_SUCCESS",
         title: "Payment successful",
         message: `Payment for order ${payment.orderId} has been confirmed.`,
-        metadata: { orderId: payment.orderId, paymentId: payment.id, source: options.source || "UNKNOWN" },
+        metadata: {
+          orderId: payment.orderId,
+          paymentId: payment.id,
+          source: options.source || "UNKNOWN",
+        },
       },
     });
 
@@ -102,7 +129,11 @@ async function applyPaymentOutcome(payment, status, options = {}) {
     return applyFailedPayment(payment, options);
   }
 
-  return applySuccessfulPayment(payment, options);
+  if (status === "SUCCESS") {
+    return applySuccessfulPayment(payment, options);
+  }
+
+  throw new ApiError(422, "Unsupported payment status from verification.");
 }
 
 async function initializePayment(customerId, payload) {
@@ -137,25 +168,47 @@ async function initializePayment(customerId, payload) {
     checkoutReference: null,
   });
 
-  const checkout = buildProviderCheckout(payload.provider, {
+  const providerRequest = buildProviderCheckout(payload.provider, {
     payment: basePayment,
     order,
   });
 
+  let checkoutUrl = providerRequest.checkoutUrl;
+
+  if (payload.provider !== "SIMULATION") {
+    try {
+      const response = await axios({
+        method: providerRequest.method,
+        url: providerRequest.url,
+        data: providerRequest.providerPayload,
+        headers: providerRequest.headers,
+      });
+
+      if (payload.provider === "CHAPA") {
+        checkoutUrl = response.data?.data?.checkout_url || checkoutUrl;
+      }
+
+      if (payload.provider === "TELEBIRR") {
+        checkoutUrl = response.data?.data?.toPayUrl || response.data?.toPayUrl || checkoutUrl;
+      }
+
+      if (!checkoutUrl) {
+        throw new Error("Provider did not return a checkout URL.");
+      }
+    } catch (error) {
+      console.error(`[${payload.provider} Init Error]`, error.response?.data || error.message);
+      throw new ApiError(502, `Failed to initialize payment with ${payload.provider}.`);
+    }
+  }
+
   const payment = await paymentRepository.updatePayment(basePayment.id, {
-    checkoutReference: checkout.reference || null,
-    providerPayload: checkout.providerPayload || null,
+    providerPayload: providerRequest.providerPayload || null,
   });
 
   return {
     payment,
-    checkout: {
-      provider: payload.provider,
-      checkoutUrl: checkout.checkoutUrl,
-      reference: checkout.reference,
-      instructions: checkout.instructions,
-      payload: checkout.providerPayload,
-    },
+    checkoutUrl,
+    instructions: providerRequest.instructions,
   };
 }
 
@@ -176,26 +229,49 @@ async function confirmPayment(user, paymentId, payload) {
     throw new ApiError(404, "Payment was not found.");
   }
 
-  if (payload.txRef && payload.txRef !== payment.txRef) {
-    throw new ApiError(400, "txRef does not match the initialized payment.");
-  }
+  let result;
 
-  const result = await applyPaymentOutcome(payment, payload.status, {
-    source: "MANUAL_CONFIRM",
-    failureReason: payload.status === "FAILED" ? "Manual payment confirmation marked failed." : null,
-    providerReference: payload.providerReference,
-  });
+  if (payment.provider === "SIMULATION") {
+    const simulatedStatus = normalizePaymentStatus(payload.status);
+    if (!simulatedStatus) {
+      throw new ApiError(400, "Simulation status must be SUCCESS or FAILED.");
+    }
+
+    result = await applyPaymentOutcome(payment, simulatedStatus, {
+      source: "MANUAL_CONFIRM_SIMULATION",
+      failureReason: simulatedStatus === "FAILED" ? "Simulation payment failed." : null,
+      providerTransactionId: payload.providerTransactionId || payload.providerReference || null,
+      providerPayload: payload,
+    });
+  } else {
+    // For real providers, manual payload is never trusted. Server-side verification is mandatory.
+    const verification = await verifyProviderTransaction(payment.provider, payment.txRef);
+
+    if (!verification || verification.status !== "SUCCESS") {
+      console.error(
+        `[${payment.provider} Verification Failure]`,
+        verification?.error || `Unable to verify txRef ${payment.txRef}`
+      );
+      throw new ApiError(402, "Payment could not be verified with the provider.");
+    }
+
+    result = await applySuccessfulPayment(payment, {
+      source: "MANUAL_CONFIRM_VERIFIED",
+      providerTransactionId: verification.providerTransactionId,
+      providerPayload: verification.raw || null,
+    });
+  }
 
   await createAuditLog({
     actorId: user.id,
     action: "PAYMENT_CONFIRMATION",
     entityType: "PAYMENT",
     entityId: paymentId,
-    description: `Payment ${paymentId} confirmation received with status ${payload.status}.`,
+    description: `Payment ${paymentId} confirmation handled for provider ${payment.provider}.`,
     metadata: {
       txRef: payment.txRef,
       provider: payment.provider,
-      source: "MANUAL_CONFIRM",
+      source: payment.provider === "SIMULATION" ? "MANUAL_CONFIRM_SIMULATION" : "MANUAL_CONFIRM_VERIFIED",
     },
   });
 
@@ -221,7 +297,7 @@ async function handleWebhook(provider, payload, headers) {
     if (!isValidSignature) {
       await paymentRepository.updateWebhookEvent(webhookEvent.id, {
         status: "IGNORED",
-        error: "Invalid webhook signature.",
+        error: "Invalid or missing webhook signature.",
         processedAt: new Date(),
       });
 
@@ -232,10 +308,10 @@ async function handleWebhook(provider, payload, headers) {
       };
     }
 
-    if (!parsed.txRef || !parsed.status) {
+    if (!parsed.txRef) {
       await paymentRepository.updateWebhookEvent(webhookEvent.id, {
         status: "FAILED",
-        error: "Missing txRef or unsupported payment status in webhook payload.",
+        error: "Missing provider transaction reference (txRef).",
         processedAt: new Date(),
       });
 
@@ -262,11 +338,50 @@ async function handleWebhook(provider, payload, headers) {
       };
     }
 
-    const result = await applyPaymentOutcome(payment, parsed.status, {
-      source: `${provider}_WEBHOOK`,
-      failureReason: parsed.status === "FAILED" ? `${provider} webhook indicated payment failure.` : null,
-      providerReference: parsed.providerReference,
-      providerPayload: payload,
+    if (payment.status === "SUCCESS") {
+      await paymentRepository.updateWebhookEvent(webhookEvent.id, {
+        paymentId: payment.id,
+        status: "IGNORED",
+        error: "Payment already marked as SUCCESS. Webhook is idempotently ignored.",
+        processedAt: new Date(),
+      });
+
+      return {
+        webhookEventId: webhookEvent.id,
+        status: "IGNORED",
+        paymentId: payment.id,
+        reason: "Already processed.",
+      };
+    }
+
+    // Webhook status is advisory only. Always verify with provider before mutating payment state.
+    const verification = await verifyProviderTransaction(provider, payment.txRef);
+
+    if (!verification || !verification.status) {
+      const errorMessage = verification?.error || "Provider verification returned no status.";
+
+      console.error(`[${provider} Webhook Verification Failure]`, errorMessage);
+      await paymentRepository.updateWebhookEvent(webhookEvent.id, {
+        paymentId: payment.id,
+        status: "FAILED",
+        error: errorMessage,
+        processedAt: new Date(),
+      });
+
+      return {
+        webhookEventId: webhookEvent.id,
+        status: "FAILED",
+        paymentId: payment.id,
+        reason: "Verification failed.",
+      };
+    }
+
+    const result = await applyPaymentOutcome(payment, verification.status, {
+      source: `${provider}_WEBHOOK_VERIFIED`,
+      failureReason:
+        verification.status === "FAILED" ? `${provider} verification indicated payment failure.` : null,
+      providerTransactionId: verification.providerTransactionId,
+      providerPayload: verification.raw || payload,
     });
 
     await paymentRepository.updateWebhookEvent(webhookEvent.id, {
@@ -284,7 +399,7 @@ async function handleWebhook(provider, payload, headers) {
       metadata: {
         webhookEventId: webhookEvent.id,
         txRef: parsed.txRef,
-        status: parsed.status,
+        verificationStatus: verification.status,
       },
     });
 
@@ -296,6 +411,8 @@ async function handleWebhook(provider, payload, headers) {
       orderId: result.orderId,
     };
   } catch (error) {
+    console.error(`[${provider} Webhook Failure]`, error.message);
+
     await paymentRepository.updateWebhookEvent(webhookEvent.id, {
       status: "FAILED",
       error: error.message,
@@ -306,9 +423,31 @@ async function handleWebhook(provider, payload, headers) {
   }
 }
 
+async function syncPaymentStatus(txRef) {
+  const payment = await paymentRepository.findPaymentByTxRef(txRef);
+  if (!payment) return null;
+
+  // If already processed, just return it
+  if (payment.status !== "PENDING") return payment;
+
+  // If still pending, pull the latest status directly from the provider (Chapa/TeleBirr)
+  const verification = await verifyProviderTransaction(payment.provider, payment.txRef);
+
+  if (verification && verification.status) {
+    return applyPaymentOutcome(payment, verification.status, {
+      source: "SYNC_ON_CALLBACK",
+      providerTransactionId: verification.providerTransactionId,
+      providerPayload: verification.raw,
+    });
+  }
+
+  return payment;
+}
+
 module.exports = {
   initializePayment,
   getPayment,
   confirmPayment,
   handleWebhook,
+  syncPaymentStatus,
 };

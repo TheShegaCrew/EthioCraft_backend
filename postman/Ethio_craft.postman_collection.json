@@ -1,0 +1,674 @@
+{
+  "info": {
+    "_postman_id": "3306ff06-febf-41cc-9a1a-54ff2cf52298",
+    "name": "Ethio_craft",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_exporter_id": "49090060",
+    "_collection_link": "https://go.postman.co/collection/49090060-3306ff06-febf-41cc-9a1a-54ff2cf52298?source=collection_link"
+  },
+  "item": [
+    {
+      "name": "{{baseUrl}}/auth/login",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\r\n  \"email\": \"{{customerEmail}}\",\r\n  \"password\": \"{{password}}\"\r\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{baseUrl}}/auth/login",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "auth",
+            "login"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "profile",
+      "protocolProfileBehavior": {
+        "disableBodyPruning": true
+      },
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{customerToken}}",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{baseUrl}}/users/me",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "users",
+            "me"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "health checker",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "http://localhost:4000/health",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "port": "4000",
+          "path": [
+            "health"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "adress receiver",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{customerToken}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/users/me/addresses",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "users",
+            "me",
+            "addresses"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "artisan draft workflow",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{artisanToken}}",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\r\n  \"title\": \"Colorful Handwoven Mesob Basket\",\r\n  \"description\": \"Colorful handwoven mesob basket crafted from natural fibers by Addis Ababa artisans.\",\r\n  \"category\": \"Baskets\",\r\n  \"price\": 1450,\r\n  \"stock\": 12,\r\n  \"materials\": [\"Natural grass\", \"Cotton thread\"],\r\n  \"tags\": [\"woven\", \"mesob\", \"tableware\"],\r\n  \"dimensions\": {\r\n    \"widthCm\": 32,\r\n    \"heightCm\": 24\r\n  },\r\n  \"culturalMetadata\": {\r\n    \"origin\": \"Addis Ababa, Ethiopia\",\r\n    \"technique\": \"Traditional handweaving\",\r\n    \"culturalSignificance\": \"Mesob baskets are traditionally used in Ethiopian households for serving food and symbolize hospitality and community.\"\r\n  },\r\n  \"extensionData\": {\r\n    \"isHandmade\": true,\r\n    \"ecoFriendly\": true,\r\n    \"usage\": \"Table centerpiece and food serving basket\",\r\n    \"careInstructions\": \"Keep dry and clean with a soft cloth. Avoid prolonged exposure to moisture.\"\r\n  }\r\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{baseUrl}}/artisan/products/drafts",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "artisan",
+            "products",
+            "drafts"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "artisan registration",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\r\n  \"email\": \"{{artisanEmail}}\",\r\n  \"password\": \"{{password}}\"\r\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{baseUrl}}/auth/login",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "auth",
+            "login"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "image upload",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{artisanToken}}",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "formdata",
+          "formdata": []
+        },
+        "url": {
+          "raw": "{{baseUrl}}/artisan/products/drafts/{{draftId}}/submit",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "artisan",
+            "products",
+            "drafts",
+            "{{draftId}}",
+            "submit"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "verification",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{agentToken}}",
+            "type": "text"
+          },
+          {
+            "key": "",
+            "value": "",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\"decision\":\"APPROVE\"}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{baseUrl}}/verifications/products/drafts/{{draftId}}/review",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "verifications",
+            "products",
+            "drafts",
+            "{{draftId}}",
+            "review"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "publich product",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{adminToken}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/admin/products/{{productId}}/publish",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "admin",
+            "products",
+            "{{productId}}",
+            "publish"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "product listing",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/marketplace/products",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "marketplace",
+            "products"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "single product listing",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/marketplace/products/{{productId}}",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "marketplace",
+            "products",
+            "{{productId}}"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "filter by keyword",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/marketplace/products?category=Baskets",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "marketplace",
+            "products"
+          ],
+          "query": [
+            {
+              "key": "category",
+              "value": "Baskets"
+            }
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "order creation",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{customerToken}}",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\r\n  \"addressId\": \"{{addressId}}\",\r\n  \"items\": [\r\n    {\r\n      \"productId\": \"{{productId}}\",\r\n      \"quantity\": 2\r\n    }\r\n  ]\r\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{baseUrl}}/orders",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "orders"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "order history",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{customerToken}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/orders/{{orderId}}/tracking",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "orders",
+            "{{orderId}}",
+            "tracking"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "payment intialization",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{customerToken}}",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\"orderId\":\"{{orderId}}\", \"provider\":\"CHAPA\"}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{baseUrl}}/payments/initialize",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "payments",
+            "initialize"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "payment confirmation",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{customerToken}}",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\r\n  \"status\": \"SUCCESS\",\r\n  \"txRef\": \"CHAPA-1774381181949-3vvuh6\"\r\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{baseUrl}}/payments/{{paymentId}}/confirm",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "payments",
+            "{{paymentId}}",
+            "confirm"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "order progression",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{adminToken}}",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{ \"status\": \"PROCESSING\" }",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{baseUrl}}/orders/{{orderId}}/status?",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "orders",
+            "{{orderId}}",
+            "status"
+          ],
+          "query": [
+            {
+              "key": "",
+              "value": null,
+              "type": "text"
+            }
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "notfication",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{customerToken}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/notifications/me",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "notifications",
+            "me"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "notf isread? true",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{customerToken}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/notifications/:notificationId/read",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "notifications",
+            ":notificationId",
+            "read"
+          ],
+          "variable": [
+            {
+              "key": "notificationId",
+              "value": "cmn50yira0009kt0o0b8hotse"
+            }
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "creating session with ai",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{customerToken}}",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\r\n  \"title\": \"order\",\r\n  \"context\": {\r\n    \"description\": \"how to place order\"\r\n  }\r\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{baseUrl}}/ai/chat/sessions",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "ai",
+            "chat",
+            "sessions"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "create message",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{customerToken}}",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\"message\":\"order\"}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{baseUrl}}/ai/chat/sessions/{{sessionId}}/messages?",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "ai",
+            "chat",
+            "sessions",
+            "{{sessionId}}",
+            "messages"
+          ],
+          "query": [
+            {
+              "key": "",
+              "value": null
+            }
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "create report",
+      "request": {
+        "method": "GET",
+        "header": []
+      },
+      "response": []
+    },
+    {
+      "name": "get jobs",
+      "request": {
+        "method": "GET",
+        "header": []
+      },
+      "response": []
+    },
+    {
+      "name": "get_single_job",
+      "request": {
+        "method": "GET",
+        "header": []
+      },
+      "response": []
+    },
+    {
+      "name": "payment",
+      "request": {
+        "method": "GET",
+        "header": []
+      },
+      "response": []
+    },
+    {
+      "name": "webhook touch from chapa",
+      "request": {
+        "method": "GET",
+        "header": []
+      },
+      "response": []
+    }
+  ]
+}

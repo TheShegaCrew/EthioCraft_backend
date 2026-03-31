@@ -16,6 +16,7 @@ module.exports = {
   cacheEnabled: process.env.CACHE_ENABLED === "true",
   uploadDir: path.join(process.cwd(), process.env.UPLOAD_DIR || "uploads/products"),
   telebirrBaseUrl: process.env.TELEBIRR_BASE_URL || "https://api.telebirr.et/sandbox",
+  telebirrBaseUrl: process.env.TELEBIRR_BASE_URL || "https://api.telebirr.et/production-endpoint",
   telebirrMerchantId: process.env.TELEBIRR_MERCHANT_ID || "",
   telebirrApiKey: process.env.TELEBIRR_API_KEY || "",
   telebirrWebhookSecret: process.env.TELEBIRR_WEBHOOK_SECRET || "",
