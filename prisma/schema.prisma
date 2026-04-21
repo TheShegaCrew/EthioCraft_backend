@@ -116,7 +116,15 @@ enum NotificationType {
 enum MediaOwnerType {
   PRODUCT_DRAFT
   PRODUCT
+  SAMPLE
   USER
+}
+
+enum SampleStatus {
+  SUBMITTED
+  REJECTED
+  MORE_INFO_REQUESTED
+  APPROVED
 }
 
 enum MediaKind {
@@ -143,6 +151,7 @@ model User {
   productDrafts       ProductDraft[]  @relation("ArtisanDrafts")
   reviewedDrafts      ProductDraft[]  @relation("DraftReviewedBy")
   products            Product[]       @relation("ArtisanProducts")
+  samples             Sample[]        @relation("ArtisanSamples")
   verifiedProducts    Product[]       @relation("ProductsVerifiedBy")
   customerOrders      Order[]         @relation("CustomerOrders")
   payments            Payment[]       @relation("CustomerPayments")
@@ -202,6 +211,7 @@ model Address {
 model ProductDraft {
   id                String      @id @default(cuid())
   artisanId         String
+  sampleId          String?
   title             String
   description       String
   category          String
@@ -222,11 +232,13 @@ model ProductDraft {
   createdAt         DateTime    @default(now())
   updatedAt         DateTime    @updatedAt
   artisan           User        @relation("ArtisanDrafts", fields: [artisanId], references: [id], onDelete: Cascade)
+  sample            Sample?     @relation("SampleDrafts", fields: [sampleId], references: [id], onDelete: SetNull)
   reviewer          User?       @relation("DraftReviewedBy", fields: [reviewedById], references: [id])
   media             Media[]     @relation("DraftMedia")
   product           Product?
 
   @@index([artisanId, status])
+  @@index([sampleId])
   @@index([status, createdAt])
   @@map("product_drafts")
 }
@@ -270,6 +282,7 @@ model Media {
   ownerType MediaOwnerType
   kind      MediaKind      @default(IMAGE)
   draftId   String?
+  sampleId  String?
   productId String?
   userId    String?
   url       String
@@ -279,13 +292,44 @@ model Media {
   sortOrder Int            @default(0)
   createdAt DateTime       @default(now())
   draft     ProductDraft?  @relation("DraftMedia", fields: [draftId], references: [id], onDelete: Cascade)
+  sample    Sample?        @relation("SampleMedia", fields: [sampleId], references: [id], onDelete: Cascade)
   product   Product?       @relation("ProductMedia", fields: [productId], references: [id], onDelete: Cascade)
   user      User?          @relation("UserMedia", fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([draftId, sortOrder])
+  @@index([sampleId, sortOrder])
   @@index([productId, sortOrder])
   @@index([userId, sortOrder])
   @@map("media")
+}
+
+model Sample {
+  id               String        @id @default(cuid())
+  artisanId        String
+  title            String
+  description      String
+  category         String?
+  price            Decimal?      @db.Decimal(10, 2)
+  currency         String        @default("ETB")
+  stock            Int?
+  materials        String[]      @default([])
+  tags             String[]      @default([])
+  dimensions       Json?
+  culturalMetadata Json?
+  extensionData    Json?
+  status           SampleStatus  @default(SUBMITTED)
+  submissionNotes  String?
+  reviewedAt       DateTime?
+  reviewedById     String?
+  submittedAt      DateTime?
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+  artisan          User          @relation("ArtisanSamples", fields: [artisanId], references: [id], onDelete: Cascade)
+  media            Media[]       @relation("SampleMedia")
+  drafts           ProductDraft[] @relation("SampleDrafts")
+
+  @@index([artisanId, status])
+  @@map("samples")
 }
 
 model Order {

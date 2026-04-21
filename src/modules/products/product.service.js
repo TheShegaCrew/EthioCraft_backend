@@ -68,6 +68,50 @@ async function createDraft(artisanId, payload) {
   return productRepository.createDraft(artisanId, mapDraftPayload(payload));
 }
 
+async function createSample(artisanId, payload) {
+  return productRepository.createSample(artisanId, mapDraftPayload(payload));
+}
+
+async function listArtisanSamples(artisanId) {
+  return productRepository.listSamplesByArtisan(artisanId);
+}
+
+async function getArtisanSample(artisanId, sampleId) {
+  const sample = await productRepository.findSampleById(sampleId);
+  if (!sample || sample.artisanId !== artisanId) {
+    throw new ApiError(404, "Product sample was not found.");
+  }
+
+  return sample;
+}
+
+async function uploadSampleImages(artisanId, sampleId, files) {
+  const sample = await productRepository.findSampleById(sampleId);
+
+  if (!sample || sample.artisanId !== artisanId) {
+    throw new ApiError(404, "Product sample was not found.");
+  }
+
+  if (!files?.length) {
+    throw new ApiError(400, "At least one image file must be provided.");
+  }
+
+  await productRepository.createSampleMedia(
+    files.map((file, index) => ({
+      ownerType: "SAMPLE",
+      kind: "IMAGE",
+      sampleId,
+      url: `/uploads/products/${file.filename}`,
+      mimeType: file.mimetype,
+      size: file.size,
+      altText: sample.title,
+      sortOrder: sample.media.length + index,
+    })),
+  );
+
+  return productRepository.findSampleById(sampleId);
+}
+
 async function listArtisanDrafts(artisanId) {
   return productRepository.listDraftsByArtisan(artisanId);
 }
@@ -78,18 +122,41 @@ async function getArtisanDraft(artisanId, draftId) {
   return draft;
 }
 
-async function updateDraft(artisanId, draftId, payload) {
+async function updateDraft(actor, draftId, payload) {
   const draft = await productRepository.findDraftById(draftId);
-  ensureDraftOwnership(draft, artisanId);
-  ensureDraftEditable(draft);
+
+  if (!draft) {
+    throw new ApiError(404, "Product draft was not found.");
+  }
+
+  if (actor.role === "ARTISAN") {
+    ensureDraftOwnership(draft, actor.id);
+    ensureDraftEditable(draft);
+  } else {
+    // Verification agents and admins may update drafts, but do not allow changes to already approved drafts
+    if (draft.status === "APPROVED") {
+      throw new ApiError(409, "Approved drafts cannot be edited.");
+    }
+  }
 
   return productRepository.updateDraft(draftId, mapDraftPayload(payload, { partial: true }));
 }
 
-async function uploadDraftImages(artisanId, draftId, files) {
+async function uploadDraftImages(actor, draftId, files) {
   const draft = await productRepository.findDraftById(draftId);
-  ensureDraftOwnership(draft, artisanId);
-  ensureDraftEditable(draft);
+
+  if (!draft) {
+    throw new ApiError(404, "Product draft was not found.");
+  }
+
+  if (actor.role === "ARTISAN") {
+    ensureDraftOwnership(draft, actor.id);
+    ensureDraftEditable(draft);
+  } else {
+    if (draft.status === "APPROVED") {
+      throw new ApiError(409, "Cannot upload images to an approved draft.");
+    }
+  }
 
   if (!files?.length) {
     throw new ApiError(400, "At least one image file must be provided.");
@@ -111,10 +178,18 @@ async function uploadDraftImages(artisanId, draftId, files) {
   return productRepository.findDraftById(draftId);
 }
 
-async function submitDraft(artisanId, draftId, payload) {
+async function submitDraft(actor, draftId, payload) {
   const draft = await productRepository.findDraftById(draftId);
-  ensureDraftOwnership(draft, artisanId);
-  ensureDraftEditable(draft);
+
+  if (!draft) {
+    throw new ApiError(404, "Product draft was not found.");
+  }
+
+  // If artisan submits, ensure ownership and editable status. Admins may submit drafts as part of workflow.
+  if (actor.role === "ARTISAN") {
+    ensureDraftOwnership(draft, actor.id);
+    ensureDraftEditable(draft);
+  }
 
   if (!draft.media.length) {
     throw new ApiError(400, "Upload at least one product image before submitting for verification.");
@@ -314,6 +389,107 @@ async function reviewDraft(reviewerId, draftId, payload) {
   };
 }
 
+async function reviewSample(reviewerId, sampleId, payload) {
+  const sample = await productRepository.findSampleById(sampleId);
+
+  if (!sample) {
+    throw new ApiError(404, "Product sample was not found.");
+  }
+
+  const now = new Date();
+
+  if (payload.decision === "REJECT") {
+    const updatedSample = await prisma.$transaction(async (tx) => {
+      const updated = await tx.sample.update({
+        where: { id: sampleId },
+        data: { status: "REJECTED", reviewedAt: now, reviewedById: reviewerId },
+      });
+
+      await tx.notification.create({
+        data: {
+          userId: sample.artisanId,
+          type: "PRODUCT_REJECTED",
+          title: "Sample rejected",
+          message: `${sample.title} was rejected. Review the notes and resubmit the sample.`,
+          metadata: { sampleId, notes: payload.notes || null },
+        },
+      });
+
+      return updated;
+    });
+
+    await createAuditLog({
+      actorId: reviewerId,
+      action: "REJECT_PRODUCT",
+      entityType: "SAMPLE",
+      entityId: sampleId,
+      description: `Rejected sample ${sample.title}.`,
+      metadata: { notes: payload.notes || null },
+    });
+
+    return { sample: updatedSample };
+  }
+
+  if (payload.decision === "REQUEST_MORE_INFO") {
+    const updated = await productRepository.updateSample(sampleId, { status: "MORE_INFO_REQUESTED" });
+
+    await notificationService.createNotification({
+      userId: sample.artisanId,
+      type: "GENERAL",
+      title: "More info requested",
+      message: `${sample.title} requires more information from you. Check review notes.`,
+      metadata: { sampleId, notes: payload.notes || null },
+    });
+
+    await createAuditLog({
+      actorId: reviewerId,
+      action: "OTHER",
+      entityType: "SAMPLE",
+      entityId: sampleId,
+      description: `Requested more info for sample ${sample.title}.`,
+      metadata: { notes: payload.notes || null },
+    });
+
+    return { sample: updated };
+  }
+
+  // APPROVE -> create a product_draft from the sample
+  const draft = await productRepository.createDraftFromSample(sampleId, {}, reviewerId);
+
+  await createAuditLog({
+    actorId: reviewerId,
+    action: "APPROVE_PRODUCT",
+    entityType: "SAMPLE",
+    entityId: sampleId,
+    description: `Approved sample ${sample.title} and created draft ${draft.id}.`,
+    metadata: { draftId: draft.id },
+  });
+
+  await notificationService.createNotification({
+    userId: sample.artisanId,
+    type: "PRODUCT_APPROVED",
+    title: "Sample approved",
+    message: `${sample.title} has been approved and a product draft was created for verification.`,
+    metadata: { sampleId, draftId: draft.id },
+  });
+
+  await clearCacheByPrefix("marketplace:products:");
+
+  return { sample: await productRepository.findSampleById(sampleId), draft };
+}
+
+async function createDraftFromSample(actorId, sampleId, overrides = {}) {
+  const draft = await productRepository.createDraftFromSample(sampleId, overrides, actorId);
+
+  if (!draft) {
+    throw new ApiError(404, "Sample not found or draft could not be created.");
+  }
+
+  await clearCacheByPrefix("marketplace:products:");
+
+  return draft;
+}
+
 async function publishProduct(productId, actorId) {
   const product = await productRepository.findProductById(productId);
 
@@ -360,11 +536,17 @@ async function publishProduct(productId, actorId) {
 
 module.exports = {
   createDraft,
+  createSample,
+  listArtisanSamples,
+  getArtisanSample,
   listArtisanDrafts,
   getArtisanDraft,
   updateDraft,
   uploadDraftImages,
+  uploadSampleImages,
   submitDraft,
   reviewDraft,
+  reviewSample,
+  createDraftFromSample,
   publishProduct,
 };

@@ -13,12 +13,21 @@ const draftBody = z.object({
   extensionData: z.record(z.any()).optional(),
 });
 
+const sampleBody = draftBody.partial().refine((v) => Object.keys(v).length > 0, {
+  message: "At least one sample field must be supplied.",
+});
+
 const submitBody = z.object({
   submissionNotes: z.string().trim().max(500).optional(),
 });
 
 const reviewBody = z.object({
   decision: z.enum(["APPROVE", "REJECT"]),
+  notes: z.string().trim().max(500).optional(),
+});
+
+const reviewSampleBody = z.object({
+  decision: z.enum(["APPROVE", "REJECT", "REQUEST_MORE_INFO"]),
   notes: z.string().trim().max(500).optional(),
 });
 
@@ -31,4 +40,7 @@ module.exports = {
   }),
   submitDraftSchema: z.object({ body: submitBody }),
   reviewDraftSchema: z.object({ body: reviewBody }),
+  createSampleSchema: z.object({ body: sampleBody }),
+  updateSampleSchema: z.object({ body: sampleBody.optional() }),
+  reviewSampleSchema: z.object({ body: reviewSampleBody }),
 };

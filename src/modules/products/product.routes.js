@@ -9,33 +9,65 @@ const {
   updateDraftSchema,
   submitDraftSchema,
   reviewDraftSchema,
+  createSampleSchema,
+  reviewSampleSchema,
 } = require("./product.validation");
 
 const router = express.Router();
 
 router.use(authenticate);
-
 router.get("/artisan/products/drafts", authorize(roles.ARTISAN), productController.listDrafts);
-router.post("/artisan/products/drafts", authorize(roles.ARTISAN), validate(createDraftSchema), productController.createDraft);
+// Only admins may create drafts (prevent direct artisan writes)
+router.post("/admin/products/drafts", authorize(roles.ADMIN), validate(createDraftSchema), productController.createDraft);
 router.get("/artisan/products/drafts/:draftId", authorize(roles.ARTISAN), productController.getDraft);
+// Verification agents update drafts and upload verified media
 router.patch(
-  "/artisan/products/drafts/:draftId",
-  authorize(roles.ARTISAN),
+  "/verifications/products/drafts/:draftId",
+  authorize(roles.VERIFICATION_AGENT),
   validate(updateDraftSchema),
   productController.updateDraft,
 );
 router.post(
-  "/artisan/products/drafts/:draftId/images",
-  authorize(roles.ARTISAN),
+  "/verifications/products/drafts/:draftId/images",
+  authorize(roles.VERIFICATION_AGENT),
   upload.array("images", 6),
   productController.uploadDraftImages,
 );
+// Admin may submit a draft for final processing
 router.post(
-  "/artisan/products/drafts/:draftId/submit",
-  authorize(roles.ARTISAN),
+  "/admin/products/drafts/:draftId/submit",
+  authorize(roles.ADMIN),
   validate(submitDraftSchema),
   productController.submitDraft,
 );
+
+// Samples endpoints (artisan uploads samples; returns sampleId)
+router.get("/artisan/products/samples", authorize(roles.ARTISAN), productController.listSamples);
+router.post("/artisan/products/samples", authorize(roles.ARTISAN), validate(createSampleSchema), productController.createSample);
+router.get("/artisan/products/samples/:sampleId", authorize(roles.ARTISAN), productController.getSample);
+router.post(
+  "/artisan/products/samples/:sampleId/images",
+  authorize(roles.ARTISAN),
+  upload.array("images", 6),
+  productController.uploadSampleImages,
+);
+
+// Admin reviews samples (approve -> creates product_draft from sample)
+router.patch(
+  "/admin/products/samples/:sampleId/review",
+  authorize(roles.ADMIN),
+  validate(reviewSampleSchema),
+  productController.reviewSample,
+);
+
+// Admin can explicitly create a draft from a sample (alternate flow)
+router.post(
+  "/admin/products/samples/:sampleId/drafts",
+  authorize(roles.ADMIN),
+  
+  productController.createDraftFromSample,
+);
+
 router.patch(
   "/verifications/products/drafts/:draftId/review",
   authorize(roles.ADMIN, roles.VERIFICATION_AGENT),
