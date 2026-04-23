@@ -6,7 +6,7 @@ const createDraft = asyncHandler(async (req, res) => {
 
   res.status(201).json({
     message: "Product draft created successfully.",
-    data: draft,
+    data: draft, 
   });
 });
 
@@ -28,8 +28,26 @@ const listSamples = asyncHandler(async (req, res) => {
   });
 });
 
+const listAllSamples = asyncHandler(async (req, res) => {
+  const samples = await productService.listAllSamples();
+
+  res.status(200).json({
+    message: "All product samples fetched successfully.",
+    data: samples,
+  });
+});
+
 const getSample = asyncHandler(async (req, res) => {
   const sample = await productService.getArtisanSample(req.user.id, req.params.sampleId);
+
+  res.status(200).json({
+    message: "Product sample fetched successfully.",
+    data: sample,
+  });
+});
+
+const getSampleAdmin = asyncHandler(async (req, res) => {
+  const sample = await productService.getSampleById(req.params.sampleId);
 
   res.status(200).json({
     message: "Product sample fetched successfully.",
@@ -79,6 +97,15 @@ const uploadSampleImages = asyncHandler(async (req, res) => {
   res.status(200).json({
     message: "Sample images uploaded successfully.",
     data: { sampleId: sample.id },
+  });
+});
+
+const updateSample = asyncHandler(async (req, res) => {
+  const sample = await productService.updateSample(req.user, req.params.sampleId, req.validated.body);
+
+  res.status(200).json({
+    message: "Product sample updated successfully.",
+    data: sample,
   });
 });
 
@@ -142,4 +169,7 @@ module.exports = {
   reviewSample,
   createDraftFromSample,
   publishProduct,
+  listAllSamples,
+  getSampleAdmin,
+  updateSample,
 };

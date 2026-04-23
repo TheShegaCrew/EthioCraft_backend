@@ -97,6 +97,16 @@ function createSampleMedia(data) {
   return prisma.media.createMany({ data });
 }
 
+function listAllSamples() {
+  return prisma.sample.findMany({
+    include: {
+      media: { orderBy: { sortOrder: "asc" } },
+      artisan: true,
+    },
+    orderBy: { updatedAt: "desc" },
+  });
+}
+
 async function createDraftFromSample(sampleId, overrides = {}, actorId = null) {
   return prisma.$transaction(async (tx) => {
     const sample = await tx.sample.findUnique({ where: { id: sampleId }, include: { media: true } });
@@ -176,6 +186,7 @@ module.exports = {
   findSampleById,
   updateSample,
   createSampleMedia,
+  listAllSamples,
   findProductById,
   findProductByDraftId,
   updateProduct,

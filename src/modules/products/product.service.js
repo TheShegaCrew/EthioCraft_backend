@@ -76,9 +76,22 @@ async function listArtisanSamples(artisanId) {
   return productRepository.listSamplesByArtisan(artisanId);
 }
 
+async function listAllSamples() {
+  return productRepository.listAllSamples();
+}
+
 async function getArtisanSample(artisanId, sampleId) {
   const sample = await productRepository.findSampleById(sampleId);
   if (!sample || sample.artisanId !== artisanId) {
+    throw new ApiError(404, "Product sample was not found.");
+  }
+
+  return sample;
+}
+
+async function getSampleById(sampleId) {
+  const sample = await productRepository.findSampleById(sampleId);
+  if (!sample) {
     throw new ApiError(404, "Product sample was not found.");
   }
 
@@ -110,6 +123,26 @@ async function uploadSampleImages(artisanId, sampleId, files) {
   );
 
   return productRepository.findSampleById(sampleId);
+}
+
+async function updateSample(actor, sampleId, payload) {
+  const sample = await productRepository.findSampleById(sampleId);
+
+  if (!sample) {
+    throw new ApiError(404, "Product sample was not found.");
+  }
+
+  if (actor.role === "ARTISAN") {
+    if (sample.artisanId !== actor.id) {
+      throw new ApiError(404, "Product sample was not found.");
+    }
+
+    if (sample.status === "APPROVED") {
+      throw new ApiError(409, "Approved samples cannot be edited.");
+    }
+  }
+
+  return productRepository.updateSample(sampleId, mapDraftPayload(payload, { partial: true }));
 }
 
 async function listArtisanDrafts(artisanId) {
@@ -543,10 +576,13 @@ module.exports = {
   getArtisanDraft,
   updateDraft,
   uploadDraftImages,
+  updateSample,
   uploadSampleImages,
   submitDraft,
   reviewDraft,
   reviewSample,
   createDraftFromSample,
   publishProduct,
+  listAllSamples,
+  getSampleById,
 };

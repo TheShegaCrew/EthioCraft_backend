@@ -6,6 +6,7 @@ const validate = require("../../middlewares/validate.middleware");
 const productController = require("./product.controller");
 const {
   createDraftSchema,
+  updateSampleSchema,
   updateDraftSchema,
   submitDraftSchema,
   reviewDraftSchema,
@@ -45,6 +46,12 @@ router.post(
 router.get("/artisan/products/samples", authorize(roles.ARTISAN), productController.listSamples);
 router.post("/artisan/products/samples", authorize(roles.ARTISAN), validate(createSampleSchema), productController.createSample);
 router.get("/artisan/products/samples/:sampleId", authorize(roles.ARTISAN), productController.getSample);
+router.patch(
+  "/artisan/products/samples/:sampleId",
+  authorize(roles.ADMIN, roles.ARTISAN),
+  validate(updateSampleSchema),
+  productController.updateSample,
+);
 router.post(
   "/artisan/products/samples/:sampleId/images",
   authorize(roles.ARTISAN),
@@ -53,6 +60,8 @@ router.post(
 );
 
 // Admin reviews samples (approve -> creates product_draft from sample)
+router.get("/admin/products/samples", authorize(roles.ADMIN), productController.listAllSamples);
+router.get("/admin/products/samples/:sampleId", authorize(roles.ADMIN), productController.getSampleAdmin);
 router.patch(
   "/admin/products/samples/:sampleId/review",
   authorize(roles.ADMIN),

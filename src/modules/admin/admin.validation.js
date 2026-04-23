@@ -21,7 +21,19 @@ const topArtisanQuerySchema = z.object({
   params: z.any().optional(),
 });
 
+const userListQuerySchema = z.object({
+  query: z.object({
+    page: z.coerce.number().int().min(1).optional(),
+    limit: z.coerce.number().int().min(1).max(100).optional(),
+    role: z.string().optional(),
+    search: z.string().optional(),
+  }),
+  body: z.any().optional(),
+  params: z.any().optional(),
+});
+
 module.exports = {
   dateRangeQuerySchema,
   topArtisanQuerySchema,
+  userListQuerySchema,
 };

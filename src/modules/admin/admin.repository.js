@@ -195,6 +195,38 @@ function listArtisansByIds(ids) {
   });
 }
 
+function listUsers(pagination, where) {
+  return prisma.user.findMany({
+    where: where || {},
+    orderBy: {
+      createdAt: "desc",
+    },
+    skip: pagination.skip,
+    take: pagination.limit,
+    select: {
+      id: true,
+      firstName: true,
+      lastName: true,
+      email: true,
+      role: true,
+      status: true,
+      createdAt: true,
+      artisanProfile: {
+        select: {
+          shopName: true,
+          region: true,
+        },
+      },
+    },
+  });
+}
+
+function countUsers(where) {
+  return prisma.user.count({
+    where: where || {},
+  });
+}
+
 function listAuditLogs(pagination) {
   return prisma.adminAuditLog.findMany({
     orderBy: {
@@ -240,4 +272,6 @@ module.exports = {
   listAuditLogs,
   countAuditLogs,
   createAuditLog,
+  listUsers,
+  countUsers,
 };

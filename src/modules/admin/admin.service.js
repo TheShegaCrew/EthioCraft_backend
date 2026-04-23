@@ -186,6 +186,38 @@ async function getAuditLogs(query) {
   };
 }
 
+async function getUsers(query) {
+  const pagination = getPagination(query);
+
+  const where = {};
+  if (query.role) {
+    where.role = query.role;
+  }
+
+  if (query.search) {
+    where.OR = [
+      { firstName: { contains: query.search, mode: "insensitive" } },
+      { lastName: { contains: query.search, mode: "insensitive" } },
+      { email: { contains: query.search, mode: "insensitive" } },
+    ];
+  }
+
+  const [items, total] = await Promise.all([
+    adminRepository.listUsers(pagination, where),
+    adminRepository.countUsers(where),
+  ]);
+
+  return {
+    items,
+    meta: {
+      page: pagination.page,
+      limit: pagination.limit,
+      total,
+      totalPages: Math.ceil(total / pagination.limit) || 1,
+    },
+  };
+}
+
 function createAuditLog(payload) {
   return adminRepository.createAuditLog(payload);
 }
@@ -197,5 +229,6 @@ module.exports = {
   getRecentOrders,
   getTopArtisans,
   getAuditLogs,
+  getUsers,
   createAuditLog,
 };
