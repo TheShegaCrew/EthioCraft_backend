@@ -64,6 +64,15 @@ const getUsers = asyncHandler(async (req, res) => {
   });
 });
 
+const getUser = asyncHandler(async (req, res) => {
+  const user = await adminService.getUser(req.params.userId);
+
+  res.status(200).json({
+    message: "User fetched successfully.",
+    data: user,
+  });
+});
+
 module.exports = {
   getDashboardOverview,
   getDashboardRevenue,
@@ -72,4 +81,5 @@ module.exports = {
   getTopArtisans,
   getAuditLogs,
   getUsers,
+  getUser,
 };

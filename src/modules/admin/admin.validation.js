@@ -32,8 +32,15 @@ const userListQuerySchema = z.object({
   params: z.any().optional(),
 });
 
+const userParamsSchema = z.object({
+  params: z.object({
+    userId: z.string().min(1),
+  }),
+});
+
 module.exports = {
   dateRangeQuerySchema,
   topArtisanQuerySchema,
   userListQuerySchema,
+  userParamsSchema,
 };

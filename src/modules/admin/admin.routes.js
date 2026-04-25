@@ -3,7 +3,7 @@ const roles = require("../../constants/roles");
 const { authenticate, authorize } = require("../../middlewares/auth.middleware");
 const validate = require("../../middlewares/validate.middleware");
 const adminController = require("./admin.controller");
-const { dateRangeQuerySchema, topArtisanQuerySchema, userListQuerySchema } = require("./admin.validation");
+const { dateRangeQuerySchema, topArtisanQuerySchema, userListQuerySchema, userParamsSchema } = require("./admin.validation");
 
 const router = express.Router();
 
@@ -17,5 +17,6 @@ router.get("/dashboard/orders", validate(dateRangeQuerySchema), adminController.
 router.get("/dashboard/artisans/top", validate(topArtisanQuerySchema), adminController.getTopArtisans);
 router.get("/audit-logs", validate(dateRangeQuerySchema), adminController.getAuditLogs);
 router.get("/users", validate(userListQuerySchema), adminController.getUsers);
+router.get("/users/:userId", validate(userParamsSchema), adminController.getUser);
 
 module.exports = router;

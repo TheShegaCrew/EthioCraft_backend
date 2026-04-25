@@ -218,6 +218,16 @@ async function getUsers(query) {
   };
 }
 
+async function getUser(userId) {
+  const user = await adminRepository.getUserById(userId);
+
+  if (!user) {
+    throw new ApiError(404, "User was not found.");
+  }
+
+  return user;
+}
+
 function createAuditLog(payload) {
   return adminRepository.createAuditLog(payload);
 }
@@ -230,5 +240,6 @@ module.exports = {
   getTopArtisans,
   getAuditLogs,
   getUsers,
+  getUser,
   createAuditLog,
 };

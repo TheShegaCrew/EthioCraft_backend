@@ -1,4 +1,5 @@
 const prisma = require("../../config/prisma");
+const { publicUserSelect } = require("../../constants/db-selects");
 
 function listUsersByRole() {
   return prisma.user.groupBy({
@@ -221,6 +222,13 @@ function listUsers(pagination, where) {
   });
 }
 
+function getUserById(userId) {
+  return prisma.user.findUnique({
+    where: { id: userId },
+    select: publicUserSelect,
+  });
+}
+
 function countUsers(where) {
   return prisma.user.count({
     where: where || {},
@@ -274,4 +282,5 @@ module.exports = {
   createAuditLog,
   listUsers,
   countUsers,
+  getUserById,
 };
