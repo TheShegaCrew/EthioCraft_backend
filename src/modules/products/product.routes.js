@@ -1,4 +1,4 @@
-﻿const express = require("express");
+const express = require("express");
 const upload = require("../../config/upload");
 const roles = require("../../constants/roles");
 const { authenticate, authorize } = require("../../middlewares/auth.middleware");
@@ -48,7 +48,7 @@ router.post("/artisan/products/samples", authorize(roles.ARTISAN), validate(crea
 router.get("/artisan/products/samples/:sampleId", authorize(roles.ARTISAN), productController.getSample);
 router.patch(
   "/artisan/products/samples/:sampleId",
-  authorize(roles.ADMIN, roles.ARTISAN),
+  authorize(roles.ARTISAN),
   validate(updateSampleSchema),
   productController.updateSample,
 );
@@ -73,7 +73,6 @@ router.patch(
 router.post(
   "/admin/products/samples/:sampleId/drafts",
   authorize(roles.ADMIN),
-  
   productController.createDraftFromSample,
 );
 

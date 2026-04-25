@@ -4,7 +4,6 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  
 }
 
 enum UserRole {
@@ -152,6 +151,7 @@ model User {
   reviewedDrafts      ProductDraft[]  @relation("DraftReviewedBy")
   products            Product[]       @relation("ArtisanProducts")
   samples             Sample[]        @relation("ArtisanSamples")
+  assignedSamples     Sample[]        @relation("AssignedSampleVerifier")
   verifiedProducts    Product[]       @relation("ProductsVerifiedBy")
   customerOrders      Order[]         @relation("CustomerOrders")
   payments            Payment[]       @relation("CustomerPayments")
@@ -304,31 +304,34 @@ model Media {
 }
 
 model Sample {
-  id               String        @id @default(cuid())
-  artisanId        String
-  title            String
-  description      String
-  category         String?
-  price            Decimal?      @db.Decimal(10, 2)
-  currency         String        @default("ETB")
-  stock            Int?
-  materials        String[]      @default([])
-  tags             String[]      @default([])
-  dimensions       Json?
-  culturalMetadata Json?
-  extensionData    Json?
-  status           SampleStatus  @default(SUBMITTED)
-  submissionNotes  String?
-  reviewedAt       DateTime?
-  reviewedById     String?
-  submittedAt      DateTime?
-  createdAt        DateTime      @default(now())
-  updatedAt        DateTime      @updatedAt
-  artisan          User          @relation("ArtisanSamples", fields: [artisanId], references: [id], onDelete: Cascade)
-  media            Media[]       @relation("SampleMedia")
-  drafts           ProductDraft[] @relation("SampleDrafts")
+  id                 String         @id @default(cuid())
+  artisanId          String
+  title              String
+  description        String
+  category           String?
+  price              Decimal?       @db.Decimal(10, 2)
+  currency           String         @default("ETB")
+  stock              Int?
+  materials          String[]       @default([])
+  tags               String[]       @default([])
+  dimensions         Json?
+  culturalMetadata   Json?
+  extensionData      Json?
+  status             SampleStatus   @default(SUBMITTED)
+  submissionNotes    String?
+  reviewedAt         DateTime?
+  reviewedById       String?
+  assignedVerifierId String?
+  submittedAt        DateTime?
+  createdAt          DateTime       @default(now())
+  updatedAt          DateTime       @updatedAt
+  artisan            User           @relation("ArtisanSamples", fields: [artisanId], references: [id], onDelete: Cascade)
+  assignedVerifier   User?          @relation("AssignedSampleVerifier", fields: [assignedVerifierId], references: [id])
+  media              Media[]        @relation("SampleMedia")
+  drafts             ProductDraft[] @relation("SampleDrafts")
 
   @@index([artisanId, status])
+  @@index([assignedVerifierId])
   @@map("samples")
 }
 
@@ -387,7 +390,7 @@ model Payment {
   amount            Decimal               @db.Decimal(10, 2)
   currency          String                @default("ETB")
   txRef             String                @unique
-  checkoutReference String?
+  checkoutReference String? 
   paidAt            DateTime?
   failureReason     String?
   providerPayload   Json?
@@ -455,18 +458,18 @@ model PaymentWebhookEvent {
 }
 
 model ChatSession {
-  id        String            @id @default(cuid())
-  userId    String
-  title     String?
-  status    ChatSessionStatus @default(OPEN)
-  context   Json?
-  metadata  Json?
-  lastMessageAt DateTime      @default(now())
+  id            String            @id @default(cuid())
+  userId        String
+  title         String?
+  status        ChatSessionStatus @default(OPEN)
+  context       Json?
+  metadata      Json?
+  lastMessageAt DateTime          @default(now())
   closedAt      DateTime?
-  createdAt DateTime          @default(now())
-  updatedAt DateTime          @updatedAt
-  user      User              @relation(fields: [userId], references: [id], onDelete: Cascade)
-  messages  ChatMessage[]
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+  user          User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages      ChatMessage[]
 
   @@index([userId, createdAt])
   @@map("chat_sessions")

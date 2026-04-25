@@ -228,6 +228,79 @@ async function getUser(userId) {
   return user;
 }
 
+async function getUsersByRole(role, query) {
+  const pagination = getPagination(query);
+  const search = query?.search;
+
+  const [items, total] = await Promise.all([
+    adminRepository.listUsersByRole(role, pagination, search),
+    adminRepository.countUsersByRole(role, search),
+  ]);
+
+  return {
+    role,
+    items,
+    meta: {
+      page: pagination.page,
+      limit: pagination.limit,
+      total,
+      totalPages: Math.ceil(total / pagination.limit) || 1,
+    },
+  };
+}
+
+async function updateUser(userId, payload, actorId) {
+  const user = await adminRepository.getUserById(userId);
+  if (!user) {
+    throw new ApiError(404, "User was not found.");
+  }
+
+  const updatedUser = await adminRepository.updateUser(userId, payload);
+
+  await adminRepository.createAuditLog({
+    actorId,
+    action: "OTHER",
+    entityType: "USER",
+    entityId: userId,
+    description: `Updated properties for user ${userId}`,
+    metadata: { payload },
+  });
+
+  return updatedUser;
+}
+
+async function updateSample(sampleId, payload, actorId) {
+  // If caller is assigning a verifier, ensure the user exists and has the right role
+  if (payload.assignedVerifierId) {
+    const verifier = await prisma.user.findUnique({
+      where: { id: payload.assignedVerifierId },
+      select: { id: true, role: true },
+    });
+    if (!verifier) {
+      throw new ApiError(404, "Assigned verifier user was not found.");
+    }
+    if (verifier.role !== "VERIFICATION_AGENT") {
+      throw new ApiError(400, "The assigned user is not a verification agent.");
+    }
+  }
+
+  const updatedSample = await adminRepository.updateSample(sampleId, payload);
+
+  const isAgentAssignment = payload.assignedVerifierId !== undefined;
+  await adminRepository.createAuditLog({
+    actorId,
+    action: "OTHER",
+    entityType: "SAMPLE",
+    entityId: sampleId,
+    description: isAgentAssignment
+      ? `Admin assigned verifier ${payload.assignedVerifierId} to sample ${sampleId}`
+      : `Updated properties for sample ${sampleId}`,
+    metadata: { payload },
+  });
+
+  return updatedSample;
+}
+
 function createAuditLog(payload) {
   return adminRepository.createAuditLog(payload);
 }
@@ -241,5 +314,8 @@ module.exports = {
   getAuditLogs,
   getUsers,
   getUser,
+  getUsersByRole,
+  updateUser,
+  updateSample,
   createAuditLog,
 };

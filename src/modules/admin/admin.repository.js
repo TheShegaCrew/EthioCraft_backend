@@ -222,6 +222,57 @@ function listUsers(pagination, where) {
   });
 }
 
+function listUsersByRole(role, pagination, search) {
+  const where = { role };
+
+  if (search) {
+    where.OR = [
+      { firstName: { contains: search, mode: "insensitive" } },
+      { lastName: { contains: search, mode: "insensitive" } },
+      { email: { contains: search, mode: "insensitive" } },
+    ];
+  }
+
+  return prisma.user.findMany({
+    where,
+    orderBy: { createdAt: "desc" },
+    skip: pagination.skip,
+    take: pagination.limit,
+    select: {
+      id: true,
+      firstName: true,
+      lastName: true,
+      email: true,
+      phone: true,
+      role: true,
+      status: true,
+      createdAt: true,
+      artisanProfile: {
+        select: {
+          shopName: true,
+          region: true,
+          city: true,
+          verificationStatus: true,
+        },
+      },
+    },
+  });
+}
+
+function countUsersByRole(role, search) {
+  const where = { role };
+
+  if (search) {
+    where.OR = [
+      { firstName: { contains: search, mode: "insensitive" } },
+      { lastName: { contains: search, mode: "insensitive" } },
+      { email: { contains: search, mode: "insensitive" } },
+    ];
+  }
+
+  return prisma.user.count({ where });
+}
+
 function getUserById(userId) {
   return prisma.user.findUnique({
     where: { id: userId },
@@ -232,6 +283,34 @@ function getUserById(userId) {
 function countUsers(where) {
   return prisma.user.count({
     where: where || {},
+  });
+}
+
+function updateUser(userId, data) {
+  return prisma.user.update({
+    where: { id: userId },
+    data,
+    select: publicUserSelect,
+  });
+}
+
+function updateSample(sampleId, data) {
+  return prisma.sample.update({
+    where: { id: sampleId },
+    data,
+    include: {
+      assignedVerifier: {
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          email: true,
+          phone: true,
+          role: true,
+          status: true,
+        },
+      },
+    },
   });
 }
 
@@ -283,4 +362,8 @@ module.exports = {
   listUsers,
   countUsers,
   getUserById,
+  updateUser,
+  updateSample,
+  listUsersByRole,
+  countUsersByRole,
 };

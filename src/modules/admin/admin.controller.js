@@ -73,6 +73,33 @@ const getUser = asyncHandler(async (req, res) => {
   });
 });
 
+const updateUser = asyncHandler(async (req, res) => {
+  const updatedUser = await adminService.updateUser(req.params.userId, req.body, req.user?.id);
+
+  res.status(200).json({
+    message: "User updated successfully.",
+    data: updatedUser,
+  });
+});
+
+const updateSample = asyncHandler(async (req, res) => {
+  const updatedSample = await adminService.updateSample(req.params.sampleId, req.body, req.user?.id);
+
+  res.status(200).json({
+    message: "Sample updated successfully.",
+    data: updatedSample,
+  });
+});
+
+const getUsersByRole = asyncHandler(async (req, res) => {
+  const data = await adminService.getUsersByRole(req.params.role, req.query);
+
+  res.status(200).json({
+    message: `Users with role ${req.params.role} fetched successfully.`,
+    data,
+  });
+});
+
 module.exports = {
   getDashboardOverview,
   getDashboardRevenue,
@@ -82,4 +109,7 @@ module.exports = {
   getAuditLogs,
   getUsers,
   getUser,
+  getUsersByRole,
+  updateUser,
+  updateSample,
 };
