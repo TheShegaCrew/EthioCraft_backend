@@ -74,8 +74,11 @@ const updateSampleSchema = z.object({
     title: z.string().min(3).max(150).optional(),
     description: z.string().min(20).max(5000).optional(),
     category: z.string().min(2).max(120).optional(),
-    price: z.number().positive().optional(),
+    price: z.coerce.number().positive().optional(),
     stock: z.number().int().nonnegative().optional(),
+    materials: z.array(z.string()).optional(),
+    tags: z.array(z.string()).optional(),
+    culturalMetadata: z.any().optional(),
   }).refine((data) => Object.keys(data).length > 0, {
     message: "At least one field must be provided for update.",
   }),
