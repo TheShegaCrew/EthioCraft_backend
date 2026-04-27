@@ -100,6 +100,24 @@ const getUsersByRole = asyncHandler(async (req, res) => {
   });
 });
 
+const getOrders = asyncHandler(async (req, res) => {
+  const data = await adminService.getOrders(req.query);
+
+  res.status(200).json({
+    message: "Orders fetched successfully.",
+    data,
+  });
+});
+
+const getOrder = asyncHandler(async (req, res) => {
+  const data = await adminService.getOrder(req.params.orderId);
+
+  res.status(200).json({
+    message: "Order fetched successfully.",
+    data,
+  });
+});
+
 module.exports = {
   getDashboardOverview,
   getDashboardRevenue,
@@ -112,4 +130,6 @@ module.exports = {
   getUsersByRole,
   updateUser,
   updateSample,
+  getOrders,
+  getOrder,
 };

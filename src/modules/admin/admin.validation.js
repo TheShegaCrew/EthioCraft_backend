@@ -84,6 +84,26 @@ const updateSampleSchema = z.object({
   }),
 });
 
+const orderListQuerySchema = z.object({
+  query: z.object({
+    userId:   z.string().optional(),
+    status:   z.enum(["PENDING_PAYMENT", "PAID", "PROCESSING", "SHIPPED", "DELIVERED", "CANCELLED"]).optional(),
+    search:   z.string().optional(),
+    dateFrom: z.string().datetime().optional(),
+    dateTo:   z.string().datetime().optional(),
+    page:     z.coerce.number().int().min(1).optional(),
+    limit:    z.coerce.number().int().min(1).max(100).optional(),
+  }),
+  body:   z.any().optional(),
+  params: z.any().optional(),
+});
+
+const orderParamsSchema = z.object({
+  params: z.object({
+    orderId: z.string().min(1),
+  }),
+});
+
 module.exports = {
   dateRangeQuerySchema,
   topArtisanQuerySchema,
@@ -92,4 +112,6 @@ module.exports = {
   usersByRoleSchema,
   updateUserSchema,
   updateSampleSchema,
+  orderListQuerySchema,
+  orderParamsSchema,
 };

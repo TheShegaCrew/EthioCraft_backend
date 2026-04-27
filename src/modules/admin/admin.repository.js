@@ -286,6 +286,27 @@ function countUsers(where) {
   });
 }
 
+function getCustomerSummary(userId) {
+  return Promise.all([
+    prisma.order.count({ where: { customerId: userId } }),
+    prisma.order.aggregate({
+      where: { customerId: userId, status: { not: "CANCELLED" } },
+      _sum: { totalAmount: true }
+    }),
+    prisma.order.findFirst({
+      where: { customerId: userId },
+      orderBy: { createdAt: "desc" },
+      select: { createdAt: true }
+    })
+  ]).then(([totalOrders, totalSpentResult, lastOrder]) => {
+    return {
+      totalOrders,
+      totalSpent: totalSpentResult._sum.totalAmount ? Number(totalSpentResult._sum.totalAmount) : 0,
+      lastOrderDate: lastOrder ? lastOrder.createdAt : null
+    };
+  });
+}
+
 function updateUser(userId, data) {
   return prisma.user.update({
     where: { id: userId },
@@ -366,4 +387,5 @@ module.exports = {
   updateSample,
   listUsersByRole,
   countUsersByRole,
+  getCustomerSummary,
 };

@@ -2,6 +2,7 @@ const prisma = require("../../config/prisma");
 const ApiError = require("../../utils/apiError");
 const { getPagination } = require("../../utils/pagination");
 const adminRepository = require("./admin.repository");
+const orderRepository = require("../orders/order.repository");
 
 function decimalToNumber(value) {
   return value === null || value === undefined ? 0 : Number(value);
@@ -225,6 +226,10 @@ async function getUser(userId) {
     throw new ApiError(404, "User was not found.");
   }
 
+  if (user.role === "CUSTOMER") {
+    user.customerSummary = await adminRepository.getCustomerSummary(userId);
+  }
+
   return user;
 }
 
@@ -247,6 +252,49 @@ async function getUsersByRole(role, query) {
       totalPages: Math.ceil(total / pagination.limit) || 1,
     },
   };
+}
+
+async function getOrders(query) {
+  const pagination = getPagination(query);
+
+  const where = {};
+
+  if (query.userId)   where.customerId = query.userId;
+  if (query.status)   where.status     = query.status;
+
+  if (query.dateFrom || query.dateTo) {
+    where.createdAt = {};
+    if (query.dateFrom) where.createdAt.gte = new Date(query.dateFrom);
+    if (query.dateTo)   where.createdAt.lte = new Date(query.dateTo);
+  }
+
+  // search: try to match order id or customer name/email
+  if (query.search) {
+    where.OR = [
+      { id: { contains: query.search, mode: "insensitive" } },
+      { customer: { email:     { contains: query.search, mode: "insensitive" } } },
+      { customer: { firstName: { contains: query.search, mode: "insensitive" } } },
+      { customer: { lastName:  { contains: query.search, mode: "insensitive" } } },
+    ];
+  }
+
+  const { items, total } = await orderRepository.listOrders(where, pagination);
+
+  return {
+    items,
+    meta: {
+      page: pagination.page,
+      limit: pagination.limit,
+      total,
+      totalPages: Math.ceil(total / pagination.limit) || 1,
+    },
+  };
+}
+
+async function getOrder(orderId) {
+  const order = await orderRepository.findOrderById(orderId);
+  if (!order) throw new ApiError(404, "Order was not found.");
+  return order;
 }
 
 async function updateUser(userId, payload, actorId) {
@@ -318,4 +366,6 @@ module.exports = {
   updateUser,
   updateSample,
   createAuditLog,
+  getOrders,
+  getOrder,
 };
