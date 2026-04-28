@@ -1,4 +1,4 @@
-﻿const prisma = require("../../config/prisma");
+const prisma = require("../../config/prisma");
 
 function listPublishedProducts(where, orderBy, skip, take) {
   return prisma.product.findMany({
@@ -86,8 +86,73 @@ function findPublishedProductByIdOrSlug(identifier) {
   });
 }
 
+function listRelatedPublishedProducts({ category, excludeProductId, take = 3 }) {
+  return prisma.product.findMany({
+    where: {
+      status: "PUBLISHED",
+      category,
+      NOT: { id: excludeProductId },
+    },
+    orderBy: {
+      publishedAt: "desc",
+    },
+    take,
+    include: {
+      media: {
+        orderBy: {
+          sortOrder: "asc",
+        },
+        take: 1,
+      },
+      _count: {
+        select: {
+          reviews: true,
+        },
+      },
+    },
+  });
+}
+
+function hasDeliveredOrderForProduct({ productId, customerId }) {
+  return prisma.orderItem.findFirst({
+    where: {
+      productId,
+      order: {
+        customerId,
+        status: "DELIVERED",
+      },
+    },
+    select: {
+      id: true,
+    },
+  });
+}
+
+function createReview({ productId, customerId, rating, comment }) {
+  return prisma.review.create({
+    data: {
+      productId,
+      customerId,
+      rating,
+      comment,
+    },
+    include: {
+      customer: {
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+        },
+      },
+    },
+  });
+}
+
 module.exports = {
   listPublishedProducts,
   countPublishedProducts,
   findPublishedProductByIdOrSlug,
+  listRelatedPublishedProducts,
+  hasDeliveredOrderForProduct,
+  createReview,
 };

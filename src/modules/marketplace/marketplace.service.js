@@ -1,4 +1,5 @@
-﻿const { withCache } = require("../../config/cache");
+const { withCache } = require("../../config/cache");
+const { Prisma } = require("@prisma/client");
 const ApiError = require("../../utils/apiError");
 const { getPagination } = require("../../utils/pagination");
 const marketplaceRepository = require("./marketplace.repository");
@@ -95,13 +96,66 @@ async function getProductDetails(identifier) {
       )
     : null;
 
+  const relatedProducts = await marketplaceRepository.listRelatedPublishedProducts({
+    category: product.category,
+    excludeProductId: product.id,
+    take: 3,
+  });
+
   return {
     ...product,
     averageRating,
+    relatedProducts,
   };
+}
+
+async function createProductReview(identifier, customerId, payload) {
+  if (!customerId) {
+    throw new ApiError(401, "Authentication required.");
+  }
+
+  const rating = Number(payload?.rating);
+  const comment = typeof payload?.comment === "string" ? payload.comment.trim() : "";
+
+  if (!Number.isInteger(rating) || rating < 1 || rating > 5) {
+    throw new ApiError(400, "Rating must be an integer from 1 to 5.");
+  }
+
+  if (!comment) {
+    throw new ApiError(400, "Review comment is required.");
+  }
+
+  const product = await marketplaceRepository.findPublishedProductByIdOrSlug(identifier);
+  if (!product) {
+    throw new ApiError(404, "Published product was not found.");
+  }
+
+  const deliveredOrder = await marketplaceRepository.hasDeliveredOrderForProduct({
+    productId: product.id,
+    customerId,
+  });
+
+  if (!deliveredOrder) {
+    throw new ApiError(403, "Only customers with delivered orders can review this product.");
+  }
+
+  try {
+    return await marketplaceRepository.createReview({
+      productId: product.id,
+      customerId,
+      rating,
+      comment,
+    });
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+      throw new ApiError(409, "You have already submitted a review for this product.");
+    }
+    throw error;
+  }
 }
 
 module.exports = {
   listProducts,
   getProductDetails,
+  createProductReview,
 };

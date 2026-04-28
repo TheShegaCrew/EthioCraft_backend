@@ -1,4 +1,4 @@
-﻿const asyncHandler = require("../../utils/asyncHandler");
+const asyncHandler = require("../../utils/asyncHandler");
 const marketplaceService = require("./marketplace.service");
 
 const listProducts = asyncHandler(async (req, res) => {
@@ -19,7 +19,17 @@ const getProductDetails = asyncHandler(async (req, res) => {
   });
 });
 
+const createProductReview = asyncHandler(async (req, res) => {
+  const review = await marketplaceService.createProductReview(req.params.productIdOrSlug, req.user?.id, req.body);
+
+  res.status(201).json({
+    message: "Product review submitted successfully.",
+    data: review,
+  });
+});
+
 module.exports = {
   listProducts,
   getProductDetails,
+  createProductReview,
 };
