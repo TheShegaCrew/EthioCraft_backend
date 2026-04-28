@@ -230,6 +230,40 @@ async function getUser(userId) {
     user.customerSummary = await adminRepository.getCustomerSummary(userId);
   }
 
+  if (user.role === "ARTISAN") {
+    const [productTotal, approvedProducts, pendingSamples] = await Promise.all([
+      prisma.product.count({ where: { artisanId: userId } }),
+      prisma.product.count({ where: { artisanId: userId, status: { in: ["APPROVED", "PUBLISHED"] } } }),
+      prisma.sample.count({ where: { artisanId: userId, status: "SUBMITTED" } }),
+    ]);
+
+    user.artisanProfile = user.artisanProfile || {};
+    user.artisanProfile.extensionData = {
+      ...(user.artisanProfile.extensionData || {}),
+      productStats: {
+        total: productTotal,
+        approved: approvedProducts,
+      },
+      sampleStats: {
+        pending: pendingSamples,
+      },
+    };
+  }
+
+  if (user.role === "VERIFICATION_AGENT") {
+    const [assignedSamples, approvedSamples, rejectedSamples] = await Promise.all([
+      prisma.sample.count({ where: { assignedVerifierId: userId } }),
+      prisma.sample.count({ where: { assignedVerifierId: userId, status: "APPROVED" } }),
+      prisma.sample.count({ where: { assignedVerifierId: userId, status: "REJECTED" } }),
+    ]);
+
+    user.agentSummary = {
+      assignedSamples,
+      approvedSamples,
+      rejectedSamples,
+    };
+  }
+
   return user;
 }
 
