@@ -154,6 +154,15 @@ const publishProduct = asyncHandler(async (req, res) => {
   });
 });
 
+const getAdminProduct = asyncHandler(async (req, res) => {
+  const product = await productService.getAdminProduct(req.params.productId);
+
+  res.status(200).json({
+    message: "Admin product fetched successfully.",
+    data: product,
+  });
+});
+
 module.exports = {
   createDraft,
   createSample,
@@ -168,6 +177,7 @@ module.exports = {
   reviewDraft,
   reviewSample,
   createDraftFromSample,
+  getAdminProduct,
   publishProduct,
   listAllSamples,
   getSampleAdmin,

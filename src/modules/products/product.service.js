@@ -567,6 +567,61 @@ async function publishProduct(productId, actorId) {
   return publishedProduct;
 }
 
+async function getAdminProduct(productId) {
+  const product = await productRepository.findProductById(productId);
+
+  if (!product) {
+    throw new ApiError(404, "Product was not found.");
+  }
+
+  const [salesAgg, reviewAgg] = await Promise.all([
+    prisma.orderItem.aggregate({
+      where: {
+        productId,
+        order: {
+          status: { in: ["PAID", "PROCESSING", "SHIPPED", "DELIVERED"] },
+        },
+      },
+      _sum: { quantity: true, lineTotal: true },
+      _count: { _all: true },
+    }),
+    prisma.review.aggregate({
+      where: { productId },
+      _avg: { rating: true },
+      _count: { _all: true },
+    }),
+  ]);
+
+  const draft = product.draft || null;
+  const activity = [
+    draft?.submittedAt ? `Draft submitted on ${new Date(draft.submittedAt).toLocaleDateString()}` : null,
+    product.approvedAt ? `Approved on ${new Date(product.approvedAt).toLocaleDateString()}` : null,
+    product.publishedAt ? `Published on ${new Date(product.publishedAt).toLocaleDateString()}` : null,
+    product.updatedAt ? `Last updated on ${new Date(product.updatedAt).toLocaleDateString()}` : null,
+  ].filter(Boolean);
+
+  return {
+    ...product,
+    analytics: {
+      totalOrderItems: salesAgg._count._all || 0,
+      totalUnitsSold: Number(salesAgg._sum.quantity || 0),
+      totalRevenue: Number(salesAgg._sum.lineTotal || 0),
+      totalReviews: reviewAgg._count._all || 0,
+      averageRating: reviewAgg._avg.rating ? Number(reviewAgg._avg.rating) : null,
+    },
+    verification: {
+      submittedAt: draft?.submittedAt || null,
+      reviewedAt: draft?.reviewedAt || null,
+      approvedAt: product.approvedAt || null,
+      publishedAt: product.publishedAt || null,
+      verificationNotes: draft?.verificationNotes || null,
+      verifiedBy: product.verifier || null,
+    },
+    activity,
+    riskAlerts: Array.isArray(product.extensionData?.riskAlerts) ? product.extensionData.riskAlerts : [],
+  };
+}
+
 module.exports = {
   createDraft,
   createSample,
@@ -583,6 +638,7 @@ module.exports = {
   reviewSample,
   createDraftFromSample,
   publishProduct,
+  getAdminProduct,
   listAllSamples,
   getSampleById,
 };

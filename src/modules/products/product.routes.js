@@ -82,6 +82,11 @@ router.patch(
   validate(reviewDraftSchema),
   productController.reviewDraft,
 );
+router.get(
+  "/admin/products/:productId",
+  authorize(roles.ADMIN),
+  productController.getAdminProduct,
+);
 router.patch(
   "/admin/products/:productId/publish",
   authorize(roles.ADMIN),
