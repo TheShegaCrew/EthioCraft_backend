@@ -163,6 +163,24 @@ const getAdminProduct = asyncHandler(async (req, res) => {
   });
 });
 
+const updateAdminProduct = asyncHandler(async (req, res) => {
+  const product = await productService.updateAdminProduct(req.params.productId, req.validated.body, req.user.id);
+
+  res.status(200).json({
+    message: "Product updated successfully.",
+    data: product,
+  });
+});
+
+const deleteAdminProduct = asyncHandler(async (req, res) => {
+  const product = await productService.deleteAdminProduct(req.params.productId, req.user.id);
+
+  res.status(200).json({
+    message: "Product archived successfully.",
+    data: product,
+  });
+});
+
 module.exports = {
   createDraft,
   createSample,
@@ -178,6 +196,8 @@ module.exports = {
   reviewSample,
   createDraftFromSample,
   getAdminProduct,
+  updateAdminProduct,
+  deleteAdminProduct,
   publishProduct,
   listAllSamples,
   getSampleAdmin,

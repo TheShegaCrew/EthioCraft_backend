@@ -59,6 +59,18 @@ const productInclude = {
       role: true,
     },
   },
+  draft: {
+    include: {
+      reviewer: {
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          role: true,
+        },
+      },
+    },
+  },
   reviews: {
     orderBy: {
       createdAt: "desc",

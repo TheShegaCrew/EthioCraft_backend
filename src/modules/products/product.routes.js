@@ -12,6 +12,8 @@ const {
   reviewDraftSchema,
   createSampleSchema,
   reviewSampleSchema,
+  adminProductParamsSchema,
+  updateAdminProductSchema,
 } = require("./product.validation");
 
 const router = express.Router();
@@ -85,12 +87,25 @@ router.patch(
 router.get(
   "/admin/products/:productId",
   authorize(roles.ADMIN),
+  validate(adminProductParamsSchema),
   productController.getAdminProduct,
+);
+router.patch(
+  "/admin/products/:productId",
+  authorize(roles.ADMIN),
+  validate(updateAdminProductSchema),
+  productController.updateAdminProduct,
 );
 router.patch(
   "/admin/products/:productId/publish",
   authorize(roles.ADMIN),
   productController.publishProduct,
+);
+router.delete(
+  "/admin/products/:productId",
+  authorize(roles.ADMIN),
+  validate(adminProductParamsSchema),
+  productController.deleteAdminProduct,
 );
 
 module.exports = router;

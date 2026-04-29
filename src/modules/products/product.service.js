@@ -602,6 +602,7 @@ async function getAdminProduct(productId) {
 
   return {
     ...product,
+    featured: Boolean(product.extensionData?.featured),
     analytics: {
       totalOrderItems: salesAgg._count._all || 0,
       totalUnitsSold: Number(salesAgg._sum.quantity || 0),
@@ -622,6 +623,77 @@ async function getAdminProduct(productId) {
   };
 }
 
+async function updateAdminProduct(productId, payload, actorId) {
+  const product = await productRepository.findProductById(productId);
+
+  if (!product) {
+    throw new ApiError(404, "Product was not found.");
+  }
+
+  const nextExtensionData = payload.featured === undefined
+    ? product.extensionData
+    : {
+        ...(product.extensionData || {}),
+        featured: payload.featured,
+      };
+
+  const data = {
+    ...(payload.title !== undefined ? { title: payload.title } : {}),
+    ...(payload.description !== undefined ? { description: payload.description } : {}),
+    ...(payload.category !== undefined ? { category: payload.category } : {}),
+    ...(payload.price !== undefined ? { price: payload.price } : {}),
+    ...(payload.stock !== undefined ? { stock: payload.stock } : {}),
+    ...(payload.materials !== undefined ? { materials: payload.materials } : {}),
+    ...(payload.tags !== undefined ? { tags: payload.tags } : {}),
+    ...(payload.dimensions !== undefined ? { dimensions: payload.dimensions } : {}),
+    ...(payload.culturalMetadata !== undefined ? { culturalMetadata: payload.culturalMetadata } : {}),
+    ...(payload.status !== undefined ? { status: payload.status } : {}),
+    ...(payload.status === "PUBLISHED" && !product.publishedAt ? { publishedAt: new Date() } : {}),
+    ...(payload.status === "ARCHIVED" ? { publishedAt: product.publishedAt } : {}),
+    ...(nextExtensionData !== undefined ? { extensionData: nextExtensionData } : {}),
+  };
+
+  const updated = await productRepository.updateProduct(productId, data);
+
+  await createAuditLog({
+    actorId,
+    action: "OTHER",
+    entityType: "PRODUCT",
+    entityId: productId,
+    description: `Updated admin product ${product.title}.`,
+    metadata: { payload },
+  });
+
+  await clearCacheByPrefix("marketplace:products:");
+
+  return getAdminProduct(updated.id);
+}
+
+async function deleteAdminProduct(productId, actorId) {
+  const product = await productRepository.findProductById(productId);
+
+  if (!product) {
+    throw new ApiError(404, "Product was not found.");
+  }
+
+  const archived = await productRepository.updateProduct(productId, {
+    status: "ARCHIVED",
+  });
+
+  await createAuditLog({
+    actorId,
+    action: "OTHER",
+    entityType: "PRODUCT",
+    entityId: productId,
+    description: `Archived product ${product.title}.`,
+    metadata: { previousStatus: product.status },
+  });
+
+  await clearCacheByPrefix("marketplace:products:");
+
+  return archived;
+}
+
 module.exports = {
   createDraft,
   createSample,
@@ -639,6 +711,8 @@ module.exports = {
   createDraftFromSample,
   publishProduct,
   getAdminProduct,
+  updateAdminProduct,
+  deleteAdminProduct,
   listAllSamples,
   getSampleById,
 };
