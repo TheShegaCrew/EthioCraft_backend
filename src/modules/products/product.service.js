@@ -406,12 +406,12 @@ async function reviewDraft(reviewerId, draftId, payload) {
 
     const product = existingProduct
       ? await tx.product.update({
-          where: { id: existingProduct.id },
-          data: productData,
-        })
+        where: { id: existingProduct.id },
+        data: productData,
+      })
       : await tx.product.create({
-          data: productData,
-        });
+        data: productData,
+      });
 
     const draftMedia = await tx.media.findMany({
       where: { draftId },
@@ -688,9 +688,9 @@ async function updateAdminProduct(productId, payload, actorId) {
   const nextExtensionData = payload.featured === undefined
     ? product.extensionData
     : {
-        ...(product.extensionData || {}),
-        featured: payload.featured,
-      };
+      ...(product.extensionData || {}),
+      featured: payload.featured,
+    };
 
   const data = {
     ...(payload.title !== undefined ? { title: payload.title } : {}),

@@ -19,6 +19,16 @@ const createSample = asyncHandler(async (req, res) => {
   });
 });
 
+const deleteSampleAdmin = asyncHandler(async (req, res) => {
+  const adminService = require("../admin/admin.service");
+
+  await adminService.deleteSample(req.params.sampleId, req.user?.id);
+
+  res.status(200).json({
+    message: "Sample deleted successfully.",
+  });
+});
+
 const listSamples = asyncHandler(async (req, res) => {
   const samples = await productService.listArtisanSamples(req.user.id);
 
@@ -222,4 +232,5 @@ module.exports = {
   updateSample,
   getDraftAdmin,
   listDraftsAdmin,
+  deleteSampleAdmin,
 };

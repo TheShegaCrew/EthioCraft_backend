@@ -3,7 +3,7 @@ const roles = require("../../constants/roles");
 const { authenticate, authorize } = require("../../middlewares/auth.middleware");
 const validate = require("../../middlewares/validate.middleware");
 const adminController = require("./admin.controller");
-const { dateRangeQuerySchema, topArtisanQuerySchema, userListQuerySchema, userParamsSchema, usersByRoleSchema, updateUserSchema, updateSampleSchema, orderListQuerySchema, orderParamsSchema } = require("./admin.validation");
+const { dateRangeQuerySchema, topArtisanQuerySchema, userListQuerySchema, userParamsSchema, usersByRoleSchema, updateUserSchema, updateSampleSchema, sampleParamsSchema, orderListQuerySchema, orderParamsSchema } = require("./admin.validation");
 
 const router = express.Router();
 
@@ -21,6 +21,7 @@ router.get("/users/role/:role", validate(usersByRoleSchema), adminController.get
 router.get("/users/:userId", validate(userParamsSchema), adminController.getUser);
 router.patch("/users/:userId", validate(updateUserSchema), adminController.updateUser);
 router.patch("/samples/:sampleId", validate(updateSampleSchema), adminController.updateSample);
+router.delete("/samples/:sampleId", validate(sampleParamsSchema), adminController.deleteSample);
 
 // Orders
 router.get("/orders", validate(orderListQuerySchema), adminController.getOrders);

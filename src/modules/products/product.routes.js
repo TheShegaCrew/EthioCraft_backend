@@ -12,6 +12,7 @@ const {
   reviewDraftSchema,
   createSampleSchema,
   reviewSampleSchema,
+  adminSampleParamsSchema,
   adminProductParamsSchema,
   updateAdminProductSchema,
 } = require("./product.validation");
@@ -86,6 +87,13 @@ router.post(
   "/admin/products/samples/:sampleId/drafts",
   authorize(roles.ADMIN),
   productController.createDraftFromSample,
+);
+
+router.delete(
+  "/admin/products/samples/:sampleId",
+  authorize(roles.ADMIN),
+  validate(adminSampleParamsSchema),
+  productController.deleteSampleAdmin,
 );
 
 router.patch(
