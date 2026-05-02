@@ -7,7 +7,7 @@ const productRepository = require("./product.repository");
 const notificationService = require("../notifications/notification.service");
 const adminService = require("../admin/admin.service");
 
-const EDITABLE_DRAFT_STATUSES = ["DRAFT", "REJECTED"];
+const EDITABLE_DRAFT_STATUSES = ["ADMIN_CREATED", "AGENT_IN_PROGRESS", "REJECTED"];
 
 function mapDraftPayload(payload, options = {}) {
   const partial = options.partial || false;
@@ -149,9 +149,58 @@ async function listArtisanDrafts(artisanId) {
   return productRepository.listDraftsByArtisan(artisanId);
 }
 
+async function listDraftsAdmin(query) {
+  const { status, search } = query;
+  const where = {};
+
+  if (status && status !== "ALL") {
+    where.status = status;
+  }
+
+  if (search) {
+    where.OR = [
+      { title: { contains: search, mode: "insensitive" } },
+      { id: { contains: search, mode: "insensitive" } },
+      { artisan: { firstName: { contains: search, mode: "insensitive" } } },
+      { artisan: { lastName: { contains: search, mode: "insensitive" } } },
+    ];
+  }
+
+  return prisma.productDraft.findMany({
+    where,
+    orderBy: { updatedAt: "desc" },
+    include: {
+      artisan: {
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          artisanProfile: {
+            select: {
+              region: true,
+            },
+          },
+        },
+      },
+      media: {
+        take: 1,
+        orderBy: { sortOrder: "asc" },
+      },
+    },
+  });
+}
+
 async function getArtisanDraft(artisanId, draftId) {
   const draft = await productRepository.findDraftById(draftId);
   ensureDraftOwnership(draft, artisanId);
+  return draft;
+}
+
+async function getDraftById(draftId) {
+  const draft = await productRepository.findDraftById(draftId);
+  if (!draft) {
+    throw new ApiError(404, "Product draft was not found.");
+  }
   return draft;
 }
 
@@ -166,13 +215,19 @@ async function updateDraft(actor, draftId, payload) {
     ensureDraftOwnership(draft, actor.id);
     ensureDraftEditable(draft);
   } else {
-    // Verification agents and admins may update drafts, but do not allow changes to already approved drafts
-    if (draft.status === "APPROVED") {
-      throw new ApiError(409, "Approved drafts cannot be edited.");
+    // Verification agents and admins may update drafts, but do not allow changes to already published drafts
+    if (draft.status === "PUBLISHED") {
+      throw new ApiError(409, "Published drafts cannot be edited.");
     }
   }
 
-  return productRepository.updateDraft(draftId, mapDraftPayload(payload, { partial: true }));
+  const mapped = mapDraftPayload(payload, { partial: true });
+
+  if (actor.role !== "ARTISAN" && payload.status !== undefined) {
+    mapped.status = payload.status;
+  }
+
+  return productRepository.updateDraft(draftId, mapped);
 }
 
 async function uploadDraftImages(actor, draftId, files) {
@@ -186,8 +241,8 @@ async function uploadDraftImages(actor, draftId, files) {
     ensureDraftOwnership(draft, actor.id);
     ensureDraftEditable(draft);
   } else {
-    if (draft.status === "APPROVED") {
-      throw new ApiError(409, "Cannot upload images to an approved draft.");
+    if (draft.status === "PUBLISHED") {
+      throw new ApiError(409, "Cannot upload images to a published draft.");
     }
   }
 
@@ -229,7 +284,7 @@ async function submitDraft(actor, draftId, payload) {
   }
 
   return productRepository.updateDraft(draftId, {
-    status: "SUBMITTED",
+    status: "ADMIN_REVIEW",
     submissionNotes: payload.submissionNotes || null,
     submittedAt: new Date(),
     verificationNotes: null,
@@ -260,7 +315,7 @@ async function reviewDraft(reviewerId, draftId, payload) {
     throw new ApiError(404, "Product draft was not found.");
   }
 
-  if (draft.status !== "SUBMITTED") {
+  if (draft.status !== "ADMIN_REVIEW" && draft.status !== "AGENT_VERIFIED") {
     throw new ApiError(409, "Only submitted drafts can be reviewed.");
   }
 
@@ -322,7 +377,7 @@ async function reviewDraft(reviewerId, draftId, payload) {
     await tx.productDraft.update({
       where: { id: draftId },
       data: {
-        status: "APPROVED",
+        status: "PUBLISHED",
         verificationNotes: payload.notes || null,
         reviewedAt: now,
         reviewedById: reviewerId,
@@ -715,4 +770,6 @@ module.exports = {
   deleteAdminProduct,
   listAllSamples,
   getSampleById,
+  getDraftById,
+  listDraftsAdmin,
 };

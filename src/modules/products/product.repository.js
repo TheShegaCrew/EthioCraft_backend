@@ -1,4 +1,4 @@
-﻿const prisma = require("../../config/prisma");
+const prisma = require("../../config/prisma");
 const { draftInclude, productInclude } = require("../../constants/db-selects");
 
 async function createDraft(artisanId, data) {
@@ -127,7 +127,7 @@ async function createDraftFromSample(sampleId, overrides = {}, actorId = null) {
       dimensions: overrides.dimensions ?? sample.dimensions,
       culturalMetadata: overrides.culturalMetadata ?? sample.culturalMetadata,
       extensionData: overrides.extensionData ?? sample.extensionData,
-      status: "DRAFT",
+      status: "ADMIN_CREATED",
     };
 
     const draft = await tx.productDraft.create({ data: draftData, include: draftInclude });

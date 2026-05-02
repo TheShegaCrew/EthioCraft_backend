@@ -25,10 +25,12 @@ enum ArtisanVerificationStatus {
 }
 
 enum DraftStatus {
-  DRAFT
-  SUBMITTED
-  APPROVED
+  ADMIN_CREATED
+  AGENT_IN_PROGRESS
+  AGENT_VERIFIED
+  ADMIN_REVIEW
   REJECTED
+  PUBLISHED
 }
 
 enum ProductStatus {
@@ -223,7 +225,7 @@ model ProductDraft {
   dimensions        Json?
   culturalMetadata  Json?
   extensionData     Json?
-  status            DraftStatus @default(DRAFT)
+  status            DraftStatus @default(ADMIN_CREATED)
   submissionNotes   String?
   verificationNotes String?
   submittedAt       DateTime?

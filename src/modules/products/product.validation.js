@@ -54,7 +54,9 @@ const adminProductUpdateBody = z.object({
 module.exports = {
   createDraftSchema: z.object({ body: draftBody }),
   updateDraftSchema: z.object({
-    body: draftBody.partial().refine((value) => Object.keys(value).length > 0, {
+    body: draftBody.extend({
+      status: z.enum(["ADMIN_CREATED", "AGENT_IN_PROGRESS", "AGENT_VERIFIED", "ADMIN_REVIEW", "REJECTED", "PUBLISHED"]).optional()
+    }).partial().refine((value) => Object.keys(value).length > 0, {
       message: "At least one draft field must be supplied.",
     }),
   }),

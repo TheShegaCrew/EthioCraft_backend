@@ -24,11 +24,21 @@ router.get("/artisan/products/drafts", authorize(roles.ARTISAN), productControll
 router.post("/admin/products/drafts", authorize(roles.ADMIN), validate(createDraftSchema), productController.createDraft);
 router.get("/artisan/products/drafts/:draftId", authorize(roles.ARTISAN), productController.getDraft);
 // Verification agents update drafts and upload verified media
+router.get(
+  "/verifications/products/drafts",
+  authorize(roles.VERIFICATION_AGENT, roles.ADMIN),
+  productController.listDraftsAdmin,
+);
 router.patch(
   "/verifications/products/drafts/:draftId",
-  authorize(roles.VERIFICATION_AGENT),
+  authorize(roles.VERIFICATION_AGENT, roles.ADMIN),
   validate(updateDraftSchema),
   productController.updateDraft,
+);
+router.get(
+  "/verifications/products/drafts/:draftId",
+  authorize(roles.VERIFICATION_AGENT, roles.ADMIN),
+  productController.getDraftAdmin,
 );
 router.post(
   "/verifications/products/drafts/:draftId/images",

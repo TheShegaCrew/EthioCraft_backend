@@ -64,8 +64,26 @@ const listDrafts = asyncHandler(async (req, res) => {
   });
 });
 
+const listDraftsAdmin = asyncHandler(async (req, res) => {
+  const drafts = await productService.listDraftsAdmin(req.query);
+
+  res.status(200).json({
+    message: "All product drafts fetched successfully.",
+    data: drafts,
+  });
+});
+
 const getDraft = asyncHandler(async (req, res) => {
   const draft = await productService.getArtisanDraft(req.user.id, req.params.draftId);
+
+  res.status(200).json({
+    message: "Product draft fetched successfully.",
+    data: draft,
+  });
+});
+
+const getDraftAdmin = asyncHandler(async (req, res) => {
+  const draft = await productService.getDraftById(req.params.draftId);
 
   res.status(200).json({
     message: "Product draft fetched successfully.",
@@ -202,4 +220,6 @@ module.exports = {
   listAllSamples,
   getSampleAdmin,
   updateSample,
+  getDraftAdmin,
+  listDraftsAdmin,
 };

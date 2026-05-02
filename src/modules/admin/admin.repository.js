@@ -86,7 +86,7 @@ function listRevenuePayments(dateFrom, dateTo) {
 function listPendingVerifications(limit) {
   return prisma.productDraft.findMany({
     where: {
-      status: "SUBMITTED",
+      status: { in: ["ADMIN_REVIEW", "AGENT_VERIFIED"] },
     },
     orderBy: {
       submittedAt: "asc",
