@@ -91,6 +91,14 @@ const updateSample = asyncHandler(async (req, res) => {
   });
 });
 
+const deleteSample = asyncHandler(async (req, res) => {
+  await adminService.deleteSample(req.params.sampleId, req.user?.id);
+
+  res.status(200).json({
+    message: "Sample deleted successfully.",
+  });
+});
+
 const getUsersByRole = asyncHandler(async (req, res) => {
   const data = await adminService.getUsersByRole(req.params.role, req.query);
 
@@ -130,6 +138,7 @@ module.exports = {
   getUsersByRole,
   updateUser,
   updateSample,
+  deleteSample,
   getOrders,
   getOrder,
 };

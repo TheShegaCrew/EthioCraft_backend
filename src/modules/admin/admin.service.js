@@ -337,7 +337,24 @@ async function updateUser(userId, payload, actorId) {
     throw new ApiError(404, "User was not found.");
   }
 
-  const updatedUser = await adminRepository.updateUser(userId, payload);
+  let updateData = { ...payload };
+  if (updateData.artisanProfile) {
+    const profileUpdates = updateData.artisanProfile;
+    delete updateData.artisanProfile;
+    updateData.artisanProfile = {
+      upsert: {
+        create: {
+          shopName: profileUpdates.shopName || "New Artisan Shop",
+          bio: profileUpdates.bio,
+          region: profileUpdates.region,
+          city: profileUpdates.city,
+        },
+        update: profileUpdates
+      }
+    };
+  }
+
+  const updatedUser = await adminRepository.updateUser(userId, updateData);
 
   await adminRepository.createAuditLog({
     actorId,
@@ -383,6 +400,26 @@ async function updateSample(sampleId, payload, actorId) {
   return updatedSample;
 }
 
+async function deleteSample(sampleId, actorId) {
+  const sample = await prisma.sample.findUnique({ where: { id: sampleId } });
+  if (!sample) {
+    throw new ApiError(404, "Product sample was not found.");
+  }
+
+  await prisma.sample.delete({ where: { id: sampleId } });
+
+  await adminRepository.createAuditLog({
+    actorId,
+    action: "OTHER",
+    entityType: "SAMPLE",
+    entityId: sampleId,
+    description: `Deleted sample ${sample.title}`,
+    metadata: null,
+  });
+
+  return true;
+}
+
 function createAuditLog(payload) {
   return adminRepository.createAuditLog(payload);
 }
@@ -399,6 +436,7 @@ module.exports = {
   getUsersByRole,
   updateUser,
   updateSample,
+  deleteSample,
   createAuditLog,
   getOrders,
   getOrder,

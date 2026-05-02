@@ -64,6 +64,7 @@ module.exports = {
   reviewDraftSchema: z.object({ body: reviewBody }),
   createSampleSchema: z.object({ body: sampleBody }),
   updateSampleSchema: z.object({ body: sampleBody.optional() }),
+  adminSampleParamsSchema: z.object({ params: z.object({ sampleId: z.string().min(1) }) }),
   reviewSampleSchema: z.object({ body: reviewSampleBody }),
   adminProductParamsSchema: z.object({ params: adminProductParams }),
   updateAdminProductSchema: z.object({ params: adminProductParams, body: adminProductUpdateBody }),

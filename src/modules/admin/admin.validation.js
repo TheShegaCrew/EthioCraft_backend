@@ -38,6 +38,12 @@ const userParamsSchema = z.object({
   }),
 });
 
+const sampleParamsSchema = z.object({
+  params: z.object({
+    sampleId: z.string().min(1),
+  }),
+});
+
 const usersByRoleSchema = z.object({
   params: z.object({
     role: z.enum(["CUSTOMER", "ARTISAN", "ADMIN", "VERIFICATION_AGENT"]),
@@ -57,8 +63,16 @@ const updateUserSchema = z.object({
   body: z.object({
     firstName: z.string().min(1).max(50).optional(),
     lastName: z.string().min(1).max(50).optional(),
+    email: z.string().email().optional(),
+    phone: z.string().optional(),
     role: z.enum(["CUSTOMER", "ARTISAN", "ADMIN", "VERIFICATION_AGENT"]).optional(),
     status: z.enum(["ACTIVE", "SUSPENDED"]).optional(),
+    artisanProfile: z.object({
+      shopName: z.string().optional(),
+      bio: z.string().optional(),
+      region: z.string().optional(),
+      city: z.string().optional(),
+    }).optional(),
   }).refine((data) => Object.keys(data).length > 0, {
     message: "At least one field must be provided for update.",
   }),
@@ -112,6 +126,7 @@ module.exports = {
   usersByRoleSchema,
   updateUserSchema,
   updateSampleSchema,
+  sampleParamsSchema,
   orderListQuerySchema,
   orderParamsSchema,
 };
