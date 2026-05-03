@@ -1,4 +1,5 @@
 const prisma = require("../../config/prisma");
+const bcrypt = require("bcryptjs");
 const ApiError = require("../../utils/apiError");
 const { getPagination } = require("../../utils/pagination");
 const adminRepository = require("./admin.repository");
@@ -25,17 +26,27 @@ function parseDateRange(query = {}) {
 }
 
 function mapCountRows(rows) {
-  return rows.map((row) => ({
-    key: Object.values(row)[0],
-    count: row._count._all,
-  }));
+  return rows.map((row) => {
+    const groupKeys = Object.keys(row).filter((k) => k !== '_count');
+    let key = '';
+    if (groupKeys.length === 1) {
+      const v = row[groupKeys[0]];
+      key = v == null ? '' : String(v);
+    } else if (groupKeys.length > 1) {
+      key = groupKeys.map((k) => String(row[k] ?? '')).join(' · ');
+    }
+    return {
+      key,
+      count: row._count?._all ?? 0,
+    };
+  });
 }
 
 async function getDashboardOverview(query) {
   const { dateFrom, dateTo } = parseDateRange(query);
 
   const [usersByRole, productsByStatus, draftsByStatus, ordersByStatus, revenue, aiUsage] = await Promise.all([
-    adminRepository.listUsersByRole(),
+    adminRepository.groupUsersByRole(),
     adminRepository.listProductsByStatus(),
     adminRepository.listDraftsByStatus(),
     adminRepository.listOrdersByStatus(dateFrom, dateTo),
@@ -150,6 +161,58 @@ async function getPendingSamples(query) {
   };
 }
 
+async function getAgentMetrics() {
+  const agents = await prisma.user.findMany({
+    where: { role: "VERIFICATION_AGENT" },
+    include: {
+      assignedSamples: {
+        select: {
+          id: true,
+          status: true,
+          createdAt: true,
+          reviewedAt: true,
+        },
+      },
+    },
+  });
+
+  const totalAgents = agents.length;
+  const activeAgents = agents.filter((a) => a.status === "ACTIVE").length;
+  const inactiveAgents = totalAgents - activeAgents;
+
+  let totalAssigned = 0;
+  let totalCompleted = 0;
+  let totalTaskTimeMs = 0;
+  let completedWithTime = 0;
+
+  for (const agent of agents) {
+    totalAssigned += agent.assignedSamples.length;
+    for (const sample of agent.assignedSamples) {
+      if (sample.status === "APPROVED" || sample.status === "REJECTED") {
+        totalCompleted += 1;
+        if (sample.reviewedAt && sample.createdAt) {
+          const duration = sample.reviewedAt.getTime() - sample.createdAt.getTime();
+          if (duration > 0) {
+            totalTaskTimeMs += duration;
+            completedWithTime += 1;
+          }
+        }
+      }
+    }
+  }
+
+  const avgCompletionRate = totalAssigned > 0 ? (totalCompleted / totalAssigned) * 100 : 0;
+  const avgTaskTimeHours = completedWithTime > 0 ? totalTaskTimeMs / (1000 * 60 * 60 * completedWithTime) : 0;
+
+  return {
+    totalAgents,
+    activeAgents,
+    inactiveAgents,
+    avgCompletionRate: Number.parseFloat(avgCompletionRate.toFixed(1)),
+    avgTaskTimeHours: Number.parseFloat(avgTaskTimeHours.toFixed(1)),
+  };
+}
+
 async function getRecentOrders(query) {
   const limit = Math.min(Math.max(Number.parseInt(query.limit, 10) || 20, 1), 100);
   const orders = await adminRepository.listRecentOrders(limit);
@@ -180,6 +243,192 @@ async function getTopArtisans(query) {
       orderItems: group._count._all,
     })),
   };
+}
+
+function roleLabel(role) {
+  const map = {
+    CUSTOMER: "Customer",
+    ARTISAN: "Artisan",
+    ADMIN: "Admin",
+    VERIFICATION_AGENT: "Agent",
+  };
+  return map[role] || String(role);
+}
+
+function orderStatusLabel(status) {
+  const map = {
+    PENDING_PAYMENT: "Pending",
+    PAID: "Paid",
+    PROCESSING: "Processing",
+    SHIPPED: "Shipped",
+    DELIVERED: "Completed",
+    CANCELLED: "Cancelled",
+  };
+  return map[status] || String(status);
+}
+
+function userStatusLabel(status) {
+  return status === "ACTIVE" ? "Active" : "Suspended";
+}
+
+function artisanRowStatus(userStatus, verificationStatus) {
+  if (userStatus === "SUSPENDED") return "Suspended";
+  if (verificationStatus === "APPROVED") return "Active";
+  if (verificationStatus === "REJECTED") return "Suspended";
+  return "Pending";
+}
+
+async function getDashboardReports(query) {
+  const { type } = query;
+  const { dateFrom, dateTo } = parseDateRange(query);
+  const limit = Math.min(Math.max(Number.parseInt(query.limit, 10) || 200, 1), 500);
+  const rangeEndStr = dateTo.toISOString().slice(0, 10);
+
+  if (type === "orders") {
+    const { items } = await orderRepository.listOrders(
+      {
+        createdAt: {
+          gte: dateFrom,
+          lte: dateTo,
+        },
+      },
+      { skip: 0, limit },
+    );
+
+    const rows = items.map((order) => ({
+      id: order.id,
+      name: `${order.customer?.firstName || ""} ${order.customer?.lastName || ""}`.trim() || order.customer?.email || "—",
+      status: orderStatusLabel(order.status),
+      amount: decimalToNumber(order.totalAmount),
+      date: order.createdAt.toISOString().slice(0, 10),
+      region: order.shippingAddress?.region || "—",
+      role: "Customer",
+    }));
+
+    return {
+      range: { from: dateFrom, to: dateTo },
+      type,
+      rows,
+    };
+  }
+
+  if (type === "revenue" || type === "artisans") {
+    const groups = await adminRepository.groupTopArtisans(dateFrom, dateTo, limit);
+    const artisans = await adminRepository.listArtisansByIds(groups.map((group) => group.artisanId));
+    const artisanById = new Map(artisans.map((artisan) => [artisan.id, artisan]));
+
+    const rows = groups.map((group) => {
+      const artisan = artisanById.get(group.artisanId);
+      const shop = artisan?.artisanProfile?.shopName;
+      const name = shop || `${artisan?.firstName || ""} ${artisan?.lastName || ""}`.trim() || "—";
+      const verificationStatus = artisan?.artisanProfile?.verificationStatus;
+
+      return {
+        id: group.artisanId,
+        name,
+        status: artisanRowStatus(artisan?.status, verificationStatus),
+        amount: decimalToNumber(group._sum.lineTotal),
+        date: rangeEndStr,
+        region: artisan?.artisanProfile?.region || "—",
+        role: "Artisan",
+      };
+    });
+
+    return {
+      range: { from: dateFrom, to: dateTo },
+      type,
+      rows,
+    };
+  }
+
+  if (type === "users") {
+    const users = await prisma.user.findMany({
+      orderBy: { createdAt: "desc" },
+      take: limit,
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        email: true,
+        role: true,
+        status: true,
+        createdAt: true,
+        artisanProfile: {
+          select: {
+            region: true,
+          },
+        },
+        _count: {
+          select: { customerOrders: true },
+        },
+      },
+    });
+
+    const rows = users.map((u) => ({
+      id: u.id,
+      name: `${u.firstName} ${u.lastName}`.trim() || u.email,
+      status: userStatusLabel(u.status),
+      amount: u._count.customerOrders,
+      date: u.createdAt.toISOString().slice(0, 10),
+      region: u.artisanProfile?.region || "—",
+      role: roleLabel(u.role),
+    }));
+
+    return {
+      range: { from: dateFrom, to: dateTo },
+      type,
+      rows,
+    };
+  }
+
+  if (type === "agents") {
+    const agents = await prisma.user.findMany({
+      where: { role: "VERIFICATION_AGENT" },
+      orderBy: { createdAt: "desc" },
+      take: limit,
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        email: true,
+        status: true,
+        createdAt: true,
+        assignedSamples: {
+          where: {
+            createdAt: {
+              gte: dateFrom,
+              lte: dateTo,
+            },
+          },
+          select: {
+            createdAt: true,
+          },
+          orderBy: { createdAt: "desc" },
+        },
+      },
+    });
+
+    const rows = agents.map((a) => {
+      const lastSample = a.assignedSamples[0];
+      return {
+        id: a.id,
+        name: `${a.firstName} ${a.lastName}`.trim() || a.email || "—",
+        status: userStatusLabel(a.status),
+        amount: a.assignedSamples.length,
+        date: lastSample ? lastSample.createdAt.toISOString().slice(0, 10) : a.createdAt.toISOString().slice(0, 10),
+        region: "—",
+        role: "Agent",
+      };
+    });
+
+    return {
+      range: { from: dateFrom, to: dateTo },
+      type,
+      rows,
+    };
+  }
+
+  throw new ApiError(400, "Invalid report type.");
 }
 
 async function getAuditLogs(query) {
@@ -282,7 +531,7 @@ async function getUsersByRole(role, query) {
   const search = query?.search;
 
   const [items, total] = await Promise.all([
-    adminRepository.listUsersByRole(role, pagination, search),
+    adminRepository.listUsersByRolePaginated(role, pagination, search),
     adminRepository.countUsersByRole(role, search),
   ]);
 
@@ -378,6 +627,38 @@ async function updateUser(userId, payload, actorId) {
   return updatedUser;
 }
 
+async function createUser(payload, actorId) {
+  const existingUser = await prisma.user.findUnique({ where: { email: payload.email } });
+  if (existingUser) {
+    throw new ApiError(400, "User with this email already exists.");
+  }
+
+  const passwordHash = await bcrypt.hash(payload.password, 12);
+
+  const newUser = await prisma.user.create({
+    data: {
+      firstName: payload.firstName,
+      lastName: payload.lastName,
+      email: payload.email,
+      phone: payload.phone || null,
+      passwordHash,
+      role: payload.role,
+      status: "ACTIVE",
+    },
+  });
+
+  await adminRepository.createAuditLog({
+    actorId,
+    action: "OTHER",
+    entityType: "USER",
+    entityId: newUser.id,
+    description: `Admin created new user with role ${payload.role}`,
+    metadata: { email: payload.email, role: payload.role },
+  });
+
+  return newUser;
+}
+
 async function updateSample(sampleId, payload, actorId) {
   // If caller is assigning a verifier, ensure the user exists and has the right role
   if (payload.assignedVerifierId) {
@@ -440,6 +721,7 @@ module.exports = {
   getVerificationQueue,
   getRecentOrders,
   getTopArtisans,
+  getDashboardReports,
   getAuditLogs,
   getUsers,
   getUser,
@@ -451,4 +733,6 @@ module.exports = {
   getOrders,
   getOrder,
   getPendingSamples,
+  getAgentMetrics,
+  createUser,
 };

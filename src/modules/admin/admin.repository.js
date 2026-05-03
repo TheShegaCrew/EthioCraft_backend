@@ -1,7 +1,7 @@
 const prisma = require("../../config/prisma");
 const { publicUserSelect } = require("../../constants/db-selects");
 
-function listUsersByRole() {
+function groupUsersByRole() {
   return prisma.user.groupBy({
     by: ["role"],
     _count: {
@@ -185,11 +185,13 @@ function listArtisansByIds(ids) {
       id: true,
       firstName: true,
       lastName: true,
+      status: true,
       artisanProfile: {
         select: {
           shopName: true,
           region: true,
           culturalMetadata: true,
+          verificationStatus: true,
         },
       },
     },
@@ -222,7 +224,7 @@ function listUsers(pagination, where) {
   });
 }
 
-function listUsersByRole(role, pagination, search) {
+function listUsersByRolePaginated(role, pagination, search) {
   const where = { role };
 
   if (search) {
@@ -389,7 +391,7 @@ function createAuditLog(data) {
 }
 
 module.exports = {
-  listUsersByRole,
+  groupUsersByRole,
   listProductsByStatus,
   listDraftsByStatus,
   listOrdersByStatus,
@@ -407,7 +409,7 @@ module.exports = {
   getUserById,
   updateUser,
   updateSample,
-  listUsersByRole,
+  listUsersByRolePaginated,
   countUsersByRole,
   getCustomerSummary,
   listSamplesByStatus,
