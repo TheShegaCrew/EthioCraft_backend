@@ -10,6 +10,24 @@ const listProducts = asyncHandler(async (req, res) => {
   });
 });
 
+const listSearchSuggestions = asyncHandler(async (req, res) => {
+  const data = await marketplaceService.searchSuggestions(req.query);
+
+  res.status(200).json({
+    message: "Marketplace suggestions fetched successfully.",
+    data,
+  });
+});
+
+const listProductFacets = asyncHandler(async (req, res) => {
+  const data = await marketplaceService.getProductFacets(req.query);
+
+  res.status(200).json({
+    message: "Marketplace facets fetched successfully.",
+    data,
+  });
+});
+
 const getProductDetails = asyncHandler(async (req, res) => {
   const product = await marketplaceService.getProductDetails(req.params.productIdOrSlug);
 
@@ -30,6 +48,8 @@ const createProductReview = asyncHandler(async (req, res) => {
 
 module.exports = {
   listProducts,
+  listSearchSuggestions,
+  listProductFacets,
   getProductDetails,
   createProductReview,
 };

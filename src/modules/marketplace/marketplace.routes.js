@@ -5,6 +5,8 @@ const marketplaceController = require("./marketplace.controller");
 
 const router = express.Router();
 
+router.get("/products/suggestions", marketplaceController.listSearchSuggestions);
+router.get("/products/facets", marketplaceController.listProductFacets);
 router.get("/products", marketplaceController.listProducts);
 router.get("/products/:productIdOrSlug", marketplaceController.getProductDetails);
 router.post(
