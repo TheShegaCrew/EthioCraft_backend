@@ -126,6 +126,15 @@ const getOrder = asyncHandler(async (req, res) => {
   });
 });
 
+const getPendingSamples = asyncHandler(async (req, res) => {
+  const data = await adminService.getPendingSamples(req.query);
+
+  res.status(200).json({
+    message: "Pending samples fetched successfully.",
+    data,
+  });
+});
+
 module.exports = {
   getDashboardOverview,
   getDashboardRevenue,
@@ -141,4 +150,5 @@ module.exports = {
   deleteSample,
   getOrders,
   getOrder,
+  getPendingSamples,
 };
