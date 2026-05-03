@@ -20,6 +20,7 @@ router.get("/users", validate(userListQuerySchema), adminController.getUsers);
 router.get("/users/role/:role", validate(usersByRoleSchema), adminController.getUsersByRole);
 router.get("/users/:userId", validate(userParamsSchema), adminController.getUser);
 router.patch("/users/:userId", validate(updateUserSchema), adminController.updateUser);
+router.get("/samples/pending", adminController.getPendingSamples);
 router.patch("/samples/:sampleId", validate(updateSampleSchema), adminController.updateSample);
 router.delete("/samples/:sampleId", validate(sampleParamsSchema), adminController.deleteSample);
 

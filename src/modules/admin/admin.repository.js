@@ -307,6 +307,28 @@ function getCustomerSummary(userId) {
   });
 }
 
+function listSamplesByStatus(status, limit = 5) {
+  return prisma.sample.findMany({
+    where: { status },
+    orderBy: { createdAt: "asc" },
+    take: limit,
+    include: {
+      artisan: {
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          artisanProfile: {
+            select: {
+              shopName: true,
+            },
+          },
+        },
+      },
+    },
+  });
+}
+
 function updateUser(userId, data) {
   return prisma.user.update({
     where: { id: userId },
@@ -388,4 +410,5 @@ module.exports = {
   listUsersByRole,
   countUsersByRole,
   getCustomerSummary,
+  listSamplesByStatus,
 };

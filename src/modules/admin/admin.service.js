@@ -140,6 +140,16 @@ async function getVerificationQueue(query) {
   };
 }
 
+async function getPendingSamples(query) {
+  const limit = Math.min(Math.max(Number.parseInt(query.limit, 10) || 5, 1), 50);
+  const samples = await adminRepository.listSamplesByStatus("SUBMITTED", limit);
+
+  return {
+    count: samples.length,
+    items: samples,
+  };
+}
+
 async function getRecentOrders(query) {
   const limit = Math.min(Math.max(Number.parseInt(query.limit, 10) || 20, 1), 100);
   const orders = await adminRepository.listRecentOrders(limit);
@@ -440,4 +450,5 @@ module.exports = {
   createAuditLog,
   getOrders,
   getOrder,
+  getPendingSamples,
 };
