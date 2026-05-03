@@ -46,6 +46,15 @@ const getTopArtisans = asyncHandler(async (req, res) => {
   });
 });
 
+const getDashboardReports = asyncHandler(async (req, res) => {
+  const data = await adminService.getDashboardReports(req.query);
+
+  res.status(200).json({
+    message: "Dashboard report fetched successfully.",
+    data,
+  });
+});
+
 const getAuditLogs = asyncHandler(async (req, res) => {
   const data = await adminService.getAuditLogs(req.query);
 
@@ -135,12 +144,31 @@ const getPendingSamples = asyncHandler(async (req, res) => {
   });
 });
 
+const getAgentMetrics = asyncHandler(async (req, res) => {
+  const data = await adminService.getAgentMetrics();
+
+  res.status(200).json({
+    message: "Agent metrics fetched successfully.",
+    data,
+  });
+});
+
+const createUser = asyncHandler(async (req, res) => {
+  const newUser = await adminService.createUser(req.body, req.user?.id);
+
+  res.status(201).json({
+    message: "User created successfully.",
+    data: newUser,
+  });
+});
+
 module.exports = {
   getDashboardOverview,
   getDashboardRevenue,
   getVerificationQueue,
   getRecentOrders,
   getTopArtisans,
+  getDashboardReports,
   getAuditLogs,
   getUsers,
   getUser,
@@ -151,4 +179,6 @@ module.exports = {
   getOrders,
   getOrder,
   getPendingSamples,
+  getAgentMetrics,
+  createUser,
 };

@@ -3,7 +3,7 @@ const roles = require("../../constants/roles");
 const { authenticate, authorize } = require("../../middlewares/auth.middleware");
 const validate = require("../../middlewares/validate.middleware");
 const adminController = require("./admin.controller");
-const { dateRangeQuerySchema, topArtisanQuerySchema, userListQuerySchema, userParamsSchema, usersByRoleSchema, updateUserSchema, updateSampleSchema, sampleParamsSchema, orderListQuerySchema, orderParamsSchema } = require("./admin.validation");
+const { dateRangeQuerySchema, topArtisanQuerySchema, reportQuerySchema, userListQuerySchema, userParamsSchema, usersByRoleSchema, updateUserSchema, updateSampleSchema, sampleParamsSchema, orderListQuerySchema, orderParamsSchema, createUserSchema } = require("./admin.validation");
 
 const router = express.Router();
 
@@ -15,12 +15,15 @@ router.get("/dashboard/revenue", validate(dateRangeQuerySchema), adminController
 router.get("/dashboard/verifications", validate(dateRangeQuerySchema), adminController.getVerificationQueue);
 router.get("/dashboard/orders", validate(dateRangeQuerySchema), adminController.getRecentOrders);
 router.get("/dashboard/artisans/top", validate(topArtisanQuerySchema), adminController.getTopArtisans);
+router.get("/dashboard/reports", validate(reportQuerySchema), adminController.getDashboardReports);
 router.get("/audit-logs", validate(dateRangeQuerySchema), adminController.getAuditLogs);
 router.get("/users", validate(userListQuerySchema), adminController.getUsers);
 router.get("/users/role/:role", validate(usersByRoleSchema), adminController.getUsersByRole);
 router.get("/users/:userId", validate(userParamsSchema), adminController.getUser);
+router.post("/users", validate(createUserSchema), adminController.createUser);
 router.patch("/users/:userId", validate(updateUserSchema), adminController.updateUser);
 router.get("/samples/pending", adminController.getPendingSamples);
+router.get("/agents/metrics", adminController.getAgentMetrics);
 router.patch("/samples/:sampleId", validate(updateSampleSchema), adminController.updateSample);
 router.delete("/samples/:sampleId", validate(sampleParamsSchema), adminController.deleteSample);
 

@@ -21,6 +21,17 @@ const topArtisanQuerySchema = z.object({
   params: z.any().optional(),
 });
 
+const reportQuerySchema = z.object({
+  query: z.object({
+    type: z.enum(["orders", "revenue", "users", "artisans", "agents"]),
+    dateFrom: z.string().datetime().optional(),
+    dateTo: z.string().datetime().optional(),
+    limit: z.coerce.number().int().min(1).max(500).optional(),
+  }),
+  body: z.any().optional(),
+  params: z.any().optional(),
+});
+
 const userListQuerySchema = z.object({
   query: z.object({
     page: z.coerce.number().int().min(1).optional(),
@@ -118,9 +129,21 @@ const orderParamsSchema = z.object({
   }),
 });
 
+const createUserSchema = z.object({
+  body: z.object({
+    firstName: z.string().min(1).max(50),
+    lastName: z.string().min(1).max(50),
+    email: z.string().email(),
+    password: z.string().min(8),
+    phone: z.string().optional(),
+    role: z.enum(["CUSTOMER", "ARTISAN", "ADMIN", "VERIFICATION_AGENT"]),
+  }),
+});
+
 module.exports = {
   dateRangeQuerySchema,
   topArtisanQuerySchema,
+  reportQuerySchema,
   userListQuerySchema,
   userParamsSchema,
   usersByRoleSchema,
@@ -129,4 +152,5 @@ module.exports = {
   sampleParamsSchema,
   orderListQuerySchema,
   orderParamsSchema,
+  createUserSchema,
 };
