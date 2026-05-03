@@ -4,44 +4,71 @@ const ApiError = require("../../utils/apiError");
 const { getPagination } = require("../../utils/pagination");
 const marketplaceRepository = require("./marketplace.repository");
 
+/** Express may yield a string or string[] for repeated query keys (or comma-separated). */
+function normalizeListParam(value) {
+  if (value == null || value === "") return [];
+  const chunks = Array.isArray(value) ? value : [value];
+  return chunks
+    .flatMap((chunk) =>
+      typeof chunk === "string" ? chunk.split(",") : [String(chunk)],
+    )
+    .map((v) => v.trim())
+    .filter(Boolean);
+}
+
 function buildFilters(query) {
-  const where = {
-    status: "PUBLISHED",
-  };
+  const andParts = [{ status: "PUBLISHED" }];
 
   if (query.search) {
-    where.OR = [
-      { title: { contains: query.search, mode: "insensitive" } },
-      { description: { contains: query.search, mode: "insensitive" } },
-      { category: { contains: query.search, mode: "insensitive" } },
-    ];
+    andParts.push({
+      OR: [
+        { title: { contains: query.search, mode: "insensitive" } },
+        { description: { contains: query.search, mode: "insensitive" } },
+        { category: { contains: query.search, mode: "insensitive" } },
+      ],
+    });
   }
 
   if (query.category) {
-    where.category = { equals: query.category, mode: "insensitive" };
+    andParts.push({
+      category: { equals: query.category, mode: "insensitive" },
+    });
   }
 
   if (query.artisanId) {
-    where.artisanId = query.artisanId;
+    andParts.push({ artisanId: query.artisanId });
   }
 
   if (query.tag) {
-    where.tags = { has: query.tag };
+    andParts.push({ tags: { has: query.tag } });
   }
 
-  if (query.minPrice || query.maxPrice) {
-    where.price = {};
+  const priceFilter = {};
+  if (query.minPrice) priceFilter.gte = Number(query.minPrice);
+  if (query.maxPrice) priceFilter.lte = Number(query.maxPrice);
+  if (Object.keys(priceFilter).length) {
+    andParts.push({ price: priceFilter });
   }
 
-  if (query.minPrice) {
-    where.price.gte = Number(query.minPrice);
+  const regions = normalizeListParam(query.region);
+  if (regions.length) {
+    andParts.push({
+      artisan: {
+        artisanProfile: {
+          region: { in: regions },
+        },
+      },
+    });
   }
 
-  if (query.maxPrice) {
-    where.price.lte = Number(query.maxPrice);
+  const materials = normalizeListParam(query.material);
+  if (materials.length) {
+    andParts.push({
+      OR: materials.map((material) => ({ materials: { has: material } })),
+    });
   }
 
-  return where;
+  return andParts.length === 1 ? andParts[0] : { AND: andParts };
 }
 
 function buildSort(sortBy) {
