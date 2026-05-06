@@ -4,6 +4,7 @@ const ApiError = require("../../utils/apiError");
 const { getPagination } = require("../../utils/pagination");
 const adminRepository = require("./admin.repository");
 const orderRepository = require("../orders/order.repository");
+const { deepMerge, readSettings, writeSettings } = require("./admin.settings.store");
 
 function decimalToNumber(value) {
   return value === null || value === undefined ? 0 : Number(value);
@@ -45,7 +46,7 @@ function mapCountRows(rows) {
 async function getDashboardOverview(query) {
   const { dateFrom, dateTo } = parseDateRange(query);
 
-  const [usersByRole, productsByStatus, draftsByStatus, ordersByStatus, revenue, aiUsage] = await Promise.all([
+  const [usersByRole, productsByStatus, draftsByStatus, ordersByStatus, revenue, aiUsage, totalUsers, activeArtisans, pendingSamples] = await Promise.all([
     adminRepository.groupUsersByRole(),
     adminRepository.listProductsByStatus(),
     adminRepository.listDraftsByStatus(),
@@ -69,12 +70,20 @@ async function getDashboardOverview(query) {
         },
       }),
     ]),
+    prisma.user.count(),
+    prisma.user.count({ where: { role: "ARTISAN", status: "ACTIVE" } }),
+    prisma.sample.count({ where: { status: "SUBMITTED" } }),
   ]);
 
   return {
     range: {
       from: dateFrom,
       to: dateTo,
+    },
+    counts: {
+      totalUsers,
+      activeArtisans,
+      pendingSamples,
     },
     users: mapCountRows(usersByRole),
     products: mapCountRows(productsByStatus),
@@ -715,6 +724,67 @@ function createAuditLog(payload) {
   return adminRepository.createAuditLog(payload);
 }
 
+async function getSettings() {
+  return readSettings();
+}
+
+async function updateSettings(payload, actorId) {
+  const current = await readSettings();
+  const merged = deepMerge(current, payload || {});
+  await writeSettings(merged);
+
+  await adminRepository.createAuditLog({
+    actorId,
+    action: "OTHER",
+    entityType: "SYSTEM",
+    entityId: "ADMIN_SETTINGS",
+    description: "Updated admin settings",
+    metadata: { updatedKeys: Object.keys(payload || {}) },
+  });
+
+  return merged;
+}
+
+async function testIntegration(payload) {
+  const settings = await readSettings();
+  const provider = String(payload?.provider || "").toLowerCase();
+  const webhookUrl = payload?.webhookUrl || settings.integrations.webhookUrl;
+  const connected = Boolean(settings.integrations.connected?.[provider]);
+
+  return {
+    provider,
+    connected,
+    webhookConfigured: Boolean(webhookUrl),
+    status: connected && webhookUrl ? "ok" : "warning",
+    message: connected && webhookUrl ? "Integration looks healthy." : "Provider is not connected or webhook URL is missing.",
+  };
+}
+
+async function regenerateIntegrationKey(actorId) {
+  const settings = await readSettings();
+  const nextKey = `ec_live_${Math.random().toString(36).slice(2, 14)}${Date.now().toString(36).slice(-6)}`;
+  const merged = deepMerge(settings, {
+    integrations: {
+      apiKey: nextKey,
+    },
+  });
+
+  await writeSettings(merged);
+
+  await adminRepository.createAuditLog({
+    actorId,
+    action: "OTHER",
+    entityType: "SYSTEM",
+    entityId: "ADMIN_SETTINGS",
+    description: "Regenerated integrations API key",
+    metadata: null,
+  });
+
+  return {
+    apiKey: nextKey,
+  };
+}
+
 module.exports = {
   getDashboardOverview,
   getDashboardRevenue,
@@ -735,4 +805,8 @@ module.exports = {
   getPendingSamples,
   getAgentMetrics,
   createUser,
+  getSettings,
+  updateSettings,
+  testIntegration,
+  regenerateIntegrationKey,
 };

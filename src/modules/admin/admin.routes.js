@@ -22,6 +22,10 @@ router.get("/users/role/:role", validate(usersByRoleSchema), adminController.get
 router.get("/users/:userId", validate(userParamsSchema), adminController.getUser);
 router.post("/users", validate(createUserSchema), adminController.createUser);
 router.patch("/users/:userId", validate(updateUserSchema), adminController.updateUser);
+router.get("/settings", adminController.getSettings);
+router.put("/settings", adminController.updateSettings);
+router.post("/settings/integrations/test", adminController.testIntegration);
+router.post("/settings/integrations/regenerate-key", adminController.regenerateIntegrationKey);
 router.get("/samples/pending", adminController.getPendingSamples);
 router.get("/agents/metrics", adminController.getAgentMetrics);
 router.patch("/samples/:sampleId", validate(updateSampleSchema), adminController.updateSample);
