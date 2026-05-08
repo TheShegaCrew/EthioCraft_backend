@@ -1,5 +1,6 @@
 const express = require("express");
 const cors = require("cors");
+const cookieParser = require("cookie-parser");
 const helmet = require("helmet");
 const morgan = require("morgan");
 const path = require("path");
@@ -10,9 +11,15 @@ const { errorHandler } = require("./middlewares/error.middleware");
 
 const app = express();
 
-app.use(cors());
+app.use(
+  cors({
+    origin: env.frontendUrl,
+    credentials: true,
+  })
+);
 app.use(helmet());
 app.use(morgan(env.nodeEnv === "production" ? "combined" : "dev"));
+app.use(cookieParser());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));

@@ -34,7 +34,38 @@ const loginBody = z.object({
   password: z.string().min(8).max(100),
 });
 
+const verifyOtpBody = z.object({
+  email: z.string().trim().toLowerCase().email(),
+  code: z.string().trim().length(6).regex(/^\d{6}$/),
+});
+
+const resendOtpBody = z.object({
+  email: z.string().trim().toLowerCase().email(),
+});
+
+const forgotPasswordBody = z.object({
+  email: z.string().trim().toLowerCase().email(),
+});
+
+const resetPasswordBody = z.object({
+  email: z.string().trim().toLowerCase().email(),
+  otp: z.string().trim().length(6).regex(/^\d{6}$/),
+  newPassword: z.string().min(8).max(100),
+});
+
+const logoutBody = z
+  .object({
+    refreshToken: z.string().trim().min(1).optional(),
+  })
+  .optional()
+  .default({});
+
 module.exports = {
   registerSchema: z.object({ body: registerBody }),
   loginSchema: z.object({ body: loginBody }),
+  verifyOtpSchema: z.object({ body: verifyOtpBody }),
+  resendOtpSchema: z.object({ body: resendOtpBody }),
+  forgotPasswordSchema: z.object({ body: forgotPasswordBody }),
+  resetPasswordSchema: z.object({ body: resetPasswordBody }),
+  logoutSchema: z.object({ body: logoutBody }),
 };
