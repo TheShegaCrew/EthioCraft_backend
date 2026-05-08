@@ -124,9 +124,83 @@ const orderInclude = {
   },
 };
 
+const wishlistItemInclude = {
+  product: {
+    select: {
+      id: true,
+      title: true,
+      slug: true,
+      price: true,
+      currency: true,
+      stock: true,
+      status: true,
+      category: true,
+      media: {
+        orderBy: { sortOrder: "asc" },
+        take: 1,
+        select: {
+          id: true,
+          url: true,
+          altText: true,
+        },
+      },
+      artisan: {
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          artisanProfile: {
+            select: {
+              shopName: true,
+            },
+          },
+        },
+      },
+    },
+  },
+};
+
+const cartItemInclude = {
+  product: {
+    select: {
+      id: true,
+      title: true,
+      slug: true,
+      price: true,
+      currency: true,
+      stock: true,
+      status: true,
+      category: true,
+      media: {
+        orderBy: { sortOrder: "asc" },
+        take: 1,
+        select: {
+          id: true,
+          url: true,
+          altText: true,
+        },
+      },
+      artisan: {
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          artisanProfile: {
+            select: {
+              shopName: true,
+            },
+          },
+        },
+      },
+    },
+  },
+};
+
 module.exports = {
   publicUserSelect,
   draftInclude,
   productInclude,
   orderInclude,
+  wishlistItemInclude,
+  cartItemInclude,
 };
