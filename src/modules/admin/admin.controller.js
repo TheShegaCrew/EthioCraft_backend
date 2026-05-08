@@ -162,6 +162,42 @@ const createUser = asyncHandler(async (req, res) => {
   });
 });
 
+const getSettings = asyncHandler(async (req, res) => {
+  const data = await adminService.getSettings();
+
+  res.status(200).json({
+    message: "Admin settings fetched successfully.",
+    data,
+  });
+});
+
+const updateSettings = asyncHandler(async (req, res) => {
+  const data = await adminService.updateSettings(req.body, req.user?.id);
+
+  res.status(200).json({
+    message: "Admin settings updated successfully.",
+    data,
+  });
+});
+
+const testIntegration = asyncHandler(async (req, res) => {
+  const data = await adminService.testIntegration(req.body);
+
+  res.status(200).json({
+    message: "Integration test completed.",
+    data,
+  });
+});
+
+const regenerateIntegrationKey = asyncHandler(async (req, res) => {
+  const data = await adminService.regenerateIntegrationKey(req.user?.id);
+
+  res.status(200).json({
+    message: "Integration API key regenerated successfully.",
+    data,
+  });
+});
+
 module.exports = {
   getDashboardOverview,
   getDashboardRevenue,
@@ -181,4 +217,8 @@ module.exports = {
   getPendingSamples,
   getAgentMetrics,
   createUser,
+  getSettings,
+  updateSettings,
+  testIntegration,
+  regenerateIntegrationKey,
 };

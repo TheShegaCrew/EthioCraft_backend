@@ -390,6 +390,17 @@ function createAuditLog(data) {
   });
 }
 
+function getLatestSettingsSnapshot() {
+  return prisma.adminAuditLog.findFirst({
+    where: {
+      entityType: "SETTINGS",
+    },
+    orderBy: {
+      createdAt: "desc",
+    },
+  });
+}
+
 module.exports = {
   groupUsersByRole,
   listProductsByStatus,
@@ -404,6 +415,7 @@ module.exports = {
   listAuditLogs,
   countAuditLogs,
   createAuditLog,
+  getLatestSettingsSnapshot,
   listUsers,
   countUsers,
   getUserById,
