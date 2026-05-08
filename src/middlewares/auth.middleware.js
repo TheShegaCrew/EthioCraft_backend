@@ -3,15 +3,20 @@ const { verifyAccessToken } = require("../utils/jwt");
 const ApiError = require("../utils/apiError");
 
 async function authenticate(req, _res, next) {
+  const tokenFromCookie = req.cookies?.auth_token;
   const authorizationHeader = req.headers.authorization;
+  const tokenFromHeader =
+    authorizationHeader && authorizationHeader.startsWith("Bearer ")
+      ? authorizationHeader.split(" ")[1]
+      : null;
+  const token = tokenFromCookie || tokenFromHeader;
 
-  if (!authorizationHeader || !authorizationHeader.startsWith("Bearer ")) {
+  if (!token) {
     next(new ApiError(401, "Authorization token is required."));
     return;
   }
 
   try {
-    const token = authorizationHeader.split(" ")[1];
     const payload = verifyAccessToken(token);
     const user = await prisma.user.findUnique({
       where: { id: payload.sub },
