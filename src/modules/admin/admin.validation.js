@@ -140,6 +140,26 @@ const createUserSchema = z.object({
   }),
 });
 
+const notificationPayloadSchema = z.object({
+  params: z.object({
+    userId: z.string().min(1),
+  }),
+  body: z.object({
+    title: z.string().min(1).max(100),
+    message: z.string().min(1).max(1000),
+    type: z.enum(["GENERAL", "PRODUCT_APPROVED", "PRODUCT_REJECTED", "ORDER_PLACED", "ORDER_SHIPPED", "PAYMENT_SUCCESS", "PAYMENT_FAILED"]).optional().default("GENERAL"),
+  }),
+});
+
+const reverificationPayloadSchema = z.object({
+  params: z.object({
+    sampleId: z.string().min(1),
+  }),
+  body: z.object({
+    message: z.string().min(1).max(1000),
+  }),
+});
+
 module.exports = {
   dateRangeQuerySchema,
   topArtisanQuerySchema,
@@ -153,4 +173,6 @@ module.exports = {
   orderListQuerySchema,
   orderParamsSchema,
   createUserSchema,
+  notificationPayloadSchema,
+  reverificationPayloadSchema,
 };

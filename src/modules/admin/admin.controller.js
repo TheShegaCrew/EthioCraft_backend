@@ -198,6 +198,26 @@ const regenerateIntegrationKey = asyncHandler(async (req, res) => {
   });
 });
 
+const notifyUser = asyncHandler(async (req, res) => {
+  const { userId } = req.params;
+  const data = await adminService.notifyUser(userId, req.body, req.user?.id);
+
+  res.status(201).json({
+    message: "Notification sent successfully.",
+    data,
+  });
+});
+
+const reverifySample = asyncHandler(async (req, res) => {
+  const { sampleId } = req.params;
+  const data = await adminService.reverifySample(sampleId, req.body, req.user?.id);
+
+  res.status(200).json({
+    message: "Sample re-verification requested successfully.",
+    data,
+  });
+});
+
 module.exports = {
   getDashboardOverview,
   getDashboardRevenue,
@@ -221,4 +241,6 @@ module.exports = {
   updateSettings,
   testIntegration,
   regenerateIntegrationKey,
+  notifyUser,
+  reverifySample,
 };
