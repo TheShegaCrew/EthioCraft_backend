@@ -1,9 +1,11 @@
+const xss = require("xss");
 const prisma = require("../../config/prisma");
 const bcrypt = require("bcryptjs");
 const ApiError = require("../../utils/apiError");
 const { getPagination } = require("../../utils/pagination");
 const adminRepository = require("./admin.repository");
 const orderRepository = require("../orders/order.repository");
+const notificationService = require("../notifications/notification.service");
 const { deepMerge, readSettings, writeSettings } = require("./admin.settings.store");
 
 function decimalToNumber(value) {
@@ -785,6 +787,74 @@ async function regenerateIntegrationKey(actorId) {
   };
 }
 
+async function notifyUser(userId, payload, actorId) {
+  const targetUser = await adminRepository.getUserById(userId);
+  if (!targetUser) {
+    throw new ApiError(404, "Target user was not found.");
+  }
+
+  const safeTitle = payload.title ? xss(payload.title) : undefined;
+  const safeMessage = payload.message ? xss(payload.message) : undefined;
+
+  const notification = await notificationService.createNotification({
+    userId,
+    type: payload.type || "GENERAL",
+    title: safeTitle,
+    message: safeMessage,
+    metadata: { sentByAdminId: actorId },
+  });
+
+  await adminRepository.createAuditLog({
+    actorId,
+    action: "OTHER",
+    entityType: "USER",
+    entityId: userId,
+    description: `Admin sent manual notification to user`,
+    metadata: { title: payload.title, type: payload.type },
+  });
+
+  return notification;
+}
+
+async function reverifySample(sampleId, payload, actorId) {
+  const sample = await prisma.sample.findUnique({ where: { id: sampleId } });
+  if (!sample) {
+    throw new ApiError(404, "Product sample was not found.");
+  }
+
+  const updatedSample = await prisma.$transaction(async (tx) => {
+    const updated = await tx.sample.update({
+      where: { id: sampleId },
+      data: { status: "MORE_INFO_REQUESTED" },
+    });
+
+    const safeMessage = payload.message ? xss(payload.message) : undefined;
+
+    await tx.notification.create({
+      data: {
+        userId: sample.artisanId,
+        type: "GENERAL",
+        title: "Sample Re-verification Required",
+        message: safeMessage,
+        metadata: { sampleId, sentByAdminId: actorId },
+      },
+    });
+
+    return updated;
+  });
+
+  await adminRepository.createAuditLog({
+    actorId,
+    action: "OTHER",
+    entityType: "SAMPLE",
+    entityId: sampleId,
+    description: `Admin requested re-verification for sample`,
+    metadata: { message: payload.message },
+  });
+
+  return updatedSample;
+}
+
 module.exports = {
   getDashboardOverview,
   getDashboardRevenue,
@@ -809,4 +879,6 @@ module.exports = {
   updateSettings,
   testIntegration,
   regenerateIntegrationKey,
+  notifyUser,
+  reverifySample,
 };

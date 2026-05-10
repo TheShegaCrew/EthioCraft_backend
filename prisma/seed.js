@@ -1,4 +1,4 @@
-﻿const bcrypt = require("bcryptjs");
+const bcrypt = require("bcryptjs");
 const dotenv = require("dotenv");
 const { PrismaClient } = require("@prisma/client");
 const { PrismaPg } = require("@prisma/adapter-pg");
@@ -440,6 +440,109 @@ async function main() {
 
     orders.push(order);
   }
+
+    // Seed notifications — wider set across roles and types
+    const now = Date.now();
+    await prisma.notification.createMany({
+      data: [
+        {
+          userId: customer1.id,
+          title: "Welcome to EthioCraft!",
+          message: "Thank you for joining our marketplace. Explore our artisanal collections today.",
+          type: "GENERAL",
+          isRead: false,
+          createdAt: new Date(now - 1000 * 60 * 60 * 24 * 7),
+        },
+        {
+          userId: customer2.id,
+          title: "Welcome to EthioCraft!",
+          message: "Thanks for signing up — check out recommended items for you.",
+          type: "GENERAL",
+          isRead: true,
+          createdAt: new Date(now - 1000 * 60 * 60 * 24 * 6),
+        },
+        {
+          userId: artisan1.id,
+          title: "Product Approved",
+          message: "One of your products was approved and is now live.",
+          type: "PRODUCT_APPROVED",
+          isRead: false,
+          createdAt: new Date(now - 1000 * 60 * 60 * 24 * 5),
+        },
+        {
+          userId: artisan2.id,
+          title: "Profile Verified",
+          message: "Your artisan profile verification completed successfully.",
+          type: "GENERAL",
+          isRead: true,
+          createdAt: new Date(now - 1000 * 60 * 60 * 24 * 4),
+        },
+        {
+          userId: customer1.id,
+          title: "Order Shipped",
+          message: "Your order has been shipped and is on its way.",
+          type: "ORDER_SHIPPED",
+          isRead: false,
+          createdAt: new Date(now - 1000 * 60 * 60 * 24 * 3),
+        },
+        {
+          userId: customer3.id,
+          title: "Delivery Update",
+          message: "Your shipment is out for delivery today.",
+          type: "ORDER_SHIPPED",
+          isRead: false,
+          createdAt: new Date(now - 1000 * 60 * 60 * 24 * 2),
+        },
+        {
+          userId: artisan3.id,
+          title: "Sample Review Requested",
+          message: "An admin requested more information about your sample.",
+          type: "GENERAL",
+          isRead: false,
+          createdAt: new Date(now - 1000 * 60 * 60 * 24),
+        },
+        {
+          userId: verificationAgent1.id,
+          title: "Verification Task Assigned",
+          message: "New product drafts have been assigned to you for review.",
+          type: "GENERAL",
+          isRead: true,
+          createdAt: new Date(now - 1000 * 60 * 60 * 6),
+        },
+        {
+          userId: admin.id,
+          title: "System Report Ready",
+          message: "Daily system report is available in admin dashboard.",
+          type: "GENERAL",
+          isRead: true,
+          createdAt: new Date(now - 1000 * 60 * 60 * 3),
+        },
+        {
+          userId: customer4.id,
+          title: "Promo: Free Shipping",
+          message: "Enjoy free shipping on orders over ETB 500 for this week.",
+          type: "GENERAL",
+          isRead: false,
+          createdAt: new Date(now - 1000 * 60 * 60 * 2),
+        },
+        {
+          userId: artisan1.id,
+          title: "Payout Completed",
+          message: "Your recent payout was processed successfully.",
+          type: "GENERAL",
+          isRead: true,
+          createdAt: new Date(now - 1000 * 60 * 30),
+        },
+        {
+          userId: customer2.id,
+          title: "Review Request",
+          message: "Please leave a review for your recent purchase.",
+          type: "GENERAL",
+          isRead: false,
+          createdAt: new Date(now - 1000 * 60 * 10),
+        },
+      ],
+    });
 
   console.log("Seed completed.");
   console.log("Users created: ", [admin.email, verificationAgent1.email, verificationAgent2.email, artisan1.email, artisan2.email, artisan3.email, customer1.email, customer2.email, customer3.email, customer4.email].join(", "));

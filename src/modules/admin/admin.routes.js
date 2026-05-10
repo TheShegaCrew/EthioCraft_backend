@@ -1,9 +1,10 @@
 const express = require("express");
 const roles = require("../../constants/roles");
 const { authenticate, authorize } = require("../../middlewares/auth.middleware");
+const { rateLimit } = require("../../middlewares/rate-limit.middleware");
 const validate = require("../../middlewares/validate.middleware");
 const adminController = require("./admin.controller");
-const { dateRangeQuerySchema, topArtisanQuerySchema, reportQuerySchema, userListQuerySchema, userParamsSchema, usersByRoleSchema, updateUserSchema, updateSampleSchema, sampleParamsSchema, orderListQuerySchema, orderParamsSchema, createUserSchema } = require("./admin.validation");
+const { dateRangeQuerySchema, topArtisanQuerySchema, reportQuerySchema, userListQuerySchema, userParamsSchema, usersByRoleSchema, updateUserSchema, updateSampleSchema, sampleParamsSchema, orderListQuerySchema, orderParamsSchema, createUserSchema, notificationPayloadSchema, reverificationPayloadSchema } = require("./admin.validation");
 
 const router = express.Router();
 
@@ -34,5 +35,11 @@ router.delete("/samples/:sampleId", validate(sampleParamsSchema), adminControlle
 // Orders
 router.get("/orders", validate(orderListQuerySchema), adminController.getOrders);
 router.get("/orders/:orderId", validate(orderParamsSchema), adminController.getOrder);
+
+// Notifications & Reverification
+const notifyLimiter = rateLimit({ windowMs: 60 * 1000, max: 10, keyPrefix: 'admin-notify', message: 'Too many notification requests' });
+
+router.post("/users/:userId/notify", validate(notificationPayloadSchema), notifyLimiter, adminController.notifyUser);
+router.post("/samples/:sampleId/re-verify", validate(reverificationPayloadSchema), notifyLimiter, adminController.reverifySample);
 
 module.exports = router;
