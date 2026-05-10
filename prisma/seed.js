@@ -506,7 +506,7 @@ async function main() {
           title: "Verification Task Assigned",
           message: "New product drafts have been assigned to you for review.",
           type: "GENERAL",
-          isRead: true,
+          isRead: false,
           createdAt: new Date(now - 1000 * 60 * 60 * 6),
         },
         {
@@ -514,7 +514,7 @@ async function main() {
           title: "System Report Ready",
           message: "Daily system report is available in admin dashboard.",
           type: "GENERAL",
-          isRead: true,
+          isRead: false,
           createdAt: new Date(now - 1000 * 60 * 60 * 3),
         },
         {
