@@ -20,15 +20,20 @@ async function getCart(userId) {
 
   let subtotal = 0;
   const enrichedItems = items.map((item) => {
-    const unitPrice = Number(item.product.price);
-    const lineTotal = unitPrice * item.quantity;
-    subtotal += lineTotal;
+    try {
+      const unitPrice = Number(item.product.price);
+      const lineTotal = unitPrice * item.quantity;
+      subtotal += lineTotal;
 
-    return {
-      ...item,
-      unitPrice,
-      lineTotal,
-    };
+      return {
+        ...item,
+        unitPrice,
+        lineTotal,
+      };
+    } catch (e) {
+      console.error("Error enriching cart item:", item, e);
+      throw e;
+    }
   });
 
   return {
