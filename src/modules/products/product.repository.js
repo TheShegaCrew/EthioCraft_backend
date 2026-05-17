@@ -17,13 +17,35 @@ async function createDraft(artisanId, data) {
   };
 }
 
-function listDraftsByArtisan(artisanId) {
+function listDraftsByArtisan(artisanId, query = {}) {
+  const where = { artisanId };
+
+  if (query.status && query.status !== "ALL") {
+    where.status = query.status;
+  }
+
   return prisma.productDraft.findMany({
-    where: { artisanId },
+    where,
     include: draftInclude,
     orderBy: {
       updatedAt: "desc",
     },
+  });
+}
+
+function listProductsByArtisan(artisanId, query = {}) {
+  const where = { artisanId };
+
+  if (query.status && query.status !== "ALL") {
+    where.status = query.status;
+  } else {
+    where.status = { in: ["APPROVED", "PUBLISHED"] };
+  }
+
+  return prisma.product.findMany({
+    where,
+    include: productInclude,
+    orderBy: { updatedAt: "desc" },
   });
 }
 
@@ -178,6 +200,7 @@ function updateProduct(productId, data) {
 module.exports = {
   createDraft,
   listDraftsByArtisan,
+  listProductsByArtisan,
   findDraftById,
   updateDraft,
   createDraftMedia,
