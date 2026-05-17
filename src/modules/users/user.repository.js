@@ -13,12 +13,13 @@ function findUserWithArtisanProfile(userId) {
     where: { id: userId },
     include: {
       artisanProfile: true,
+      artisanBankDetail: true,
     },
   });
 }
 
 function updateProfile(userId, data) {
-  const { artisanProfile, ...userData } = data;
+  const { artisanProfile, artisanBankDetail, ...userData } = data;
 
   return prisma.user.update({
     where: { id: userId },
@@ -30,6 +31,16 @@ function updateProfile(userId, data) {
               upsert: {
                 create: artisanProfile,
                 update: artisanProfile,
+              },
+            },
+          }
+        : {}),
+      ...(artisanBankDetail
+        ? {
+            artisanBankDetail: {
+              upsert: {
+                create: artisanBankDetail,
+                update: artisanBankDetail,
               },
             },
           }

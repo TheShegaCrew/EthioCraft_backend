@@ -26,7 +26,59 @@ async function updateProfile(userId, payload) {
     throw new ApiError(400, "shopName is required when creating an artisan profile.");
   }
 
-  return userRepository.updateProfile(userId, payload);
+  const updatePayload = { ...payload };
+
+  if (updatePayload.artisanBankDetail && existingUser.role !== "ARTISAN") {
+    throw new ApiError(400, "Only artisans can update bank details.");
+  }
+
+  if (updatePayload.artisanBankDetail) {
+    const bankPayload = {
+      ...(existingUser.artisanBankDetail || {}),
+      ...updatePayload.artisanBankDetail,
+    };
+    delete bankPayload.id;
+    delete bankPayload.artisanId;
+    delete bankPayload.createdAt;
+    delete bankPayload.updatedAt;
+    updatePayload.artisanBankDetail = bankPayload;
+  }
+
+  if (updatePayload.artisanProfile?.extensionData) {
+    const {
+      bankName,
+      accountNumber,
+      accountHolderName,
+      ...restExtensionData
+    } = updatePayload.artisanProfile.extensionData;
+
+    const hasBankFields = bankName || accountNumber || accountHolderName;
+    if (hasBankFields) {
+      if (existingUser.role !== "ARTISAN") {
+        throw new ApiError(400, "Only artisans can update bank details.");
+      }
+      updatePayload.artisanBankDetail = {
+        ...(existingUser.artisanBankDetail || {}),
+        bankName,
+        accountNumber,
+        accountHolderName,
+      };
+    }
+
+    const nextExtensionData = {
+      ...(existingUser.artisanProfile?.extensionData || {}),
+      ...restExtensionData,
+    };
+
+    updatePayload.artisanProfile = {
+      ...updatePayload.artisanProfile,
+      ...(Object.keys(nextExtensionData).length > 0
+        ? { extensionData: nextExtensionData }
+        : {}),
+    };
+  }
+
+  return userRepository.updateProfile(userId, updatePayload);
 }
 
 async function getAddresses(userId) {

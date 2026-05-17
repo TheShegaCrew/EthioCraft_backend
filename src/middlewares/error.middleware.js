@@ -21,6 +21,21 @@ function errorHandler(error, _req, res, _next) {
     message = "Requested resource was not found.";
   }
 
+  if (error.name === "MulterError") {
+    statusCode = 400;
+    if (error.code === "LIMIT_FILE_SIZE") {
+      message = "Each image must be 5 MB or smaller.";
+    } else if (error.code === "LIMIT_FILE_COUNT") {
+      message = "You can upload up to 6 images at a time.";
+    } else {
+      message = error.message || "File upload failed.";
+    }
+  }
+
+  if (error.message && /Only JPEG, PNG, and WEBP/i.test(error.message)) {
+    statusCode = 400;
+  }
+
   res.status(statusCode).json({
     message,
     ...(details ? { details } : {}),

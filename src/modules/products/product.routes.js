@@ -15,15 +15,46 @@ const {
   adminSampleParamsSchema,
   adminProductParamsSchema,
   updateAdminProductSchema,
+  artisanListQuerySchema,
+  artisanPublishedQuerySchema,
 } = require("./product.validation");
 
 const router = express.Router();
 
 router.use(authenticate);
-router.get("/artisan/products/drafts", authorize(roles.ARTISAN), productController.listDrafts);
+router.get(
+  "/artisan/products/drafts",
+  authorize(roles.ARTISAN),
+  validate(artisanListQuerySchema),
+  productController.listDrafts,
+);
+router.get(
+  "/artisan/products/published",
+  authorize(roles.ARTISAN),
+  validate(artisanPublishedQuerySchema),
+  productController.listPublishedProducts,
+);
 // Only admins may create drafts (prevent direct artisan writes)
 router.post("/admin/products/drafts", authorize(roles.ADMIN), validate(createDraftSchema), productController.createDraft);
 router.get("/artisan/products/drafts/:draftId", authorize(roles.ARTISAN), productController.getDraft);
+router.patch(
+  "/artisan/products/drafts/:draftId",
+  authorize(roles.ARTISAN),
+  validate(updateDraftSchema),
+  productController.updateDraft,
+);
+router.post(
+  "/artisan/products/drafts/:draftId/images",
+  authorize(roles.ARTISAN),
+  upload.array("images", 6),
+  productController.uploadDraftImages,
+);
+router.post(
+  "/artisan/products/drafts/:draftId/submit",
+  authorize(roles.ARTISAN),
+  validate(submitDraftSchema),
+  productController.submitDraft,
+);
 // Verification agents update drafts and upload verified media
 router.get(
   "/verifications/products/drafts",
@@ -70,6 +101,17 @@ router.post(
   authorize(roles.ARTISAN),
   upload.array("images", 6),
   productController.uploadSampleImages,
+);
+router.post(
+  "/artisan/products/samples/:sampleId/resubmit",
+  authorize(roles.ARTISAN),
+  productController.resubmitSample,
+);
+router.delete(
+  "/artisan/products/samples/:sampleId",
+  authorize(roles.ARTISAN),
+  validate(adminSampleParamsSchema),
+  productController.deleteArtisanSample,
 );
 
 // Admin reviews samples (approve -> creates product_draft from sample)

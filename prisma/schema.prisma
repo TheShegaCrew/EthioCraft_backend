@@ -107,6 +107,9 @@ enum AuditAction {
 enum NotificationType {
   PRODUCT_APPROVED
   PRODUCT_REJECTED
+  PRODUCT_DRAFT_CREATED
+  PRODUCT_DRAFT_SUBMITTED
+  PRODUCT_PUBLISHED
   ORDER_PLACED
   ORDER_SHIPPED
   PAYMENT_SUCCESS
@@ -148,6 +151,7 @@ model User {
   createdAt           DateTime        @default(now())
   updatedAt           DateTime        @updatedAt
   artisanProfile      ArtisanProfile?
+  artisanBankDetail   ArtisanBankDetail?
   addresses           Address[]
   productDrafts       ProductDraft[]  @relation("ArtisanDrafts")
   reviewedDrafts      ProductDraft[]  @relation("DraftReviewedBy")
@@ -204,6 +208,24 @@ model ArtisanProfile {
 
   @@index([shopName])
   @@map("artisans")
+}
+
+model ArtisanBankDetail {
+  id                String   @id @default(cuid())
+  artisanId         String   @unique
+  bankName          String
+  accountNumber     String
+  accountHolderName String
+  branch            String?
+  accountType       String?
+  currency          String   @default("ETB")
+  verifiedAt        DateTime?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  artisan           User     @relation(fields: [artisanId], references: [id], onDelete: Cascade)
+
+  @@map("artisan_bank_details")
 }
 
 model Address {

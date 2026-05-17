@@ -5,7 +5,21 @@ const artisanProfileSchema = z.object({
   bio: z.string().trim().max(500).optional(),
   region: z.string().trim().max(100).optional(),
   city: z.string().trim().max(100).optional(),
+  extensionData: z.record(z.any()).optional(),
 });
+
+const artisanBankDetailSchema = z
+  .object({
+    bankName: z.string().trim().min(2).max(100).optional(),
+    accountNumber: z.string().trim().min(4).max(50).optional(),
+    accountHolderName: z.string().trim().min(2).max(100).optional(),
+    branch: z.string().trim().max(100).optional(),
+    accountType: z.string().trim().max(50).optional(),
+    currency: z.string().trim().max(10).optional(),
+  })
+  .refine((value) => Object.keys(value).length > 0, {
+    message: "At least one bank detail field must be supplied.",
+  });
 
 const updateProfileBody = z
   .object({
@@ -14,6 +28,7 @@ const updateProfileBody = z
     phone: z.string().trim().min(9).max(20).optional(),
     avatarUrl: z.string().trim().url().optional(),
     artisanProfile: artisanProfileSchema.optional(),
+    artisanBankDetail: artisanBankDetailSchema.optional(),
   })
   .refine((value) => Object.keys(value).length > 0, {
     message: "At least one profile field must be supplied.",
