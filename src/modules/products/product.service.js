@@ -6,6 +6,7 @@ const ApiError = require("../../utils/apiError");
 const productRepository = require("./product.repository");
 const notificationService = require("../notifications/notification.service");
 const adminService = require("../admin/admin.service");
+const { resolveUploadedFileUrls } = require("../../utils/media-upload");
 
 const EDITABLE_DRAFT_STATUSES = ["ADMIN_CREATED", "AGENT_IN_PROGRESS", "REJECTED"];
 
@@ -69,7 +70,17 @@ async function createDraft(artisanId, payload) {
 }
 
 async function createSample(artisanId, payload) {
-  return productRepository.createSample(artisanId, mapDraftPayload(payload));
+  const sample = await productRepository.createSample(artisanId, mapDraftPayload(payload));
+
+  await notificationService.createNotification({
+    userId: artisanId,
+    type: "GENERAL",
+    title: "Sample submitted",
+    message: `${sample.title} was submitted for admin review.`,
+    metadata: { sampleId: sample.id },
+  });
+
+  return sample;
 }
 
 async function listArtisanSamples(artisanId) {
@@ -109,14 +120,16 @@ async function uploadSampleImages(artisanId, sampleId, files) {
     throw new ApiError(400, "At least one image file must be provided.");
   }
 
+  const urls = await resolveUploadedFileUrls(files);
+
   await productRepository.createSampleMedia(
-    files.map((file, index) => ({
+    urls.map((url, index) => ({
       ownerType: "SAMPLE",
       kind: "IMAGE",
       sampleId,
-      url: `/uploads/products/${file.filename}`,
-      mimeType: file.mimetype,
-      size: file.size,
+      url,
+      mimeType: files[index].mimetype,
+      size: files[index].size,
       altText: sample.title,
       sortOrder: sample.media.length + index,
     })),
@@ -142,11 +155,84 @@ async function updateSample(actor, sampleId, payload) {
     }
   }
 
-  return productRepository.updateSample(sampleId, mapDraftPayload(payload, { partial: true }));
+  const mapped = mapDraftPayload(payload, { partial: true });
+
+  if (actor.role === "ARTISAN" && ["MORE_INFO_REQUESTED", "REJECTED"].includes(sample.status)) {
+    mapped.status = "SUBMITTED";
+    mapped.submittedAt = new Date();
+  }
+
+  return productRepository.updateSample(sampleId, mapped);
 }
 
-async function listArtisanDrafts(artisanId) {
-  return productRepository.listDraftsByArtisan(artisanId);
+async function resubmitSample(artisanId, sampleId) {
+  const sample = await productRepository.findSampleById(sampleId);
+
+  if (!sample || sample.artisanId !== artisanId) {
+    throw new ApiError(404, "Product sample was not found.");
+  }
+
+  if (sample.status === "APPROVED") {
+    throw new ApiError(409, "Approved samples cannot be resubmitted.");
+  }
+
+  if (!["MORE_INFO_REQUESTED", "REJECTED", "SUBMITTED"].includes(sample.status)) {
+    throw new ApiError(409, `Sample cannot be resubmitted while in ${sample.status} status.`);
+  }
+
+  if (!sample.media.length) {
+    throw new ApiError(400, "Upload at least one product image before resubmitting.");
+  }
+
+  const updated = await productRepository.updateSample(sampleId, {
+    status: "SUBMITTED",
+    submittedAt: new Date(),
+  });
+
+  await notificationService.createNotification({
+    userId: artisanId,
+    type: "GENERAL",
+    title: "Sample resubmitted",
+    message: `${sample.title} was resubmitted for admin review.`,
+    metadata: { sampleId },
+  });
+
+  return updated;
+}
+
+async function deleteArtisanSample(artisanId, sampleId) {
+  const sample = await productRepository.findSampleById(sampleId);
+
+  if (!sample || sample.artisanId !== artisanId) {
+    throw new ApiError(404, "Product sample was not found.");
+  }
+
+  if (sample.status === "APPROVED") {
+    throw new ApiError(409, "Approved samples cannot be deleted.");
+  }
+
+  const activeDraft = await prisma.productDraft.findFirst({
+    where: {
+      sampleId,
+      status: { notIn: ["REJECTED"] },
+    },
+  });
+
+  if (activeDraft) {
+    throw new ApiError(409, "Cannot delete this sample while a verification draft is in progress.");
+  }
+
+  await prisma.sample.delete({ where: { id: sampleId } });
+
+  return { deletedId: sampleId };
+}
+
+async function listArtisanDrafts(artisanId, query = {}) {
+  return productRepository.listDraftsByArtisan(artisanId, query);
+}
+
+async function listArtisanPublishedProducts(artisanId, query = {}) {
+  return productRepository.listProductsByArtisan(artisanId, query);
 }
 
 async function listDraftsAdmin(query) {
@@ -250,14 +336,16 @@ async function uploadDraftImages(actor, draftId, files) {
     throw new ApiError(400, "At least one image file must be provided.");
   }
 
+  const urls = await resolveUploadedFileUrls(files);
+
   await productRepository.createDraftMedia(
-    files.map((file, index) => ({
+    urls.map((url, index) => ({
       ownerType: "PRODUCT_DRAFT",
       kind: "IMAGE",
       draftId,
-      url: `/uploads/products/${file.filename}`,
-      mimeType: file.mimetype,
-      size: file.size,
+      url,
+      mimeType: files[index].mimetype,
+      size: files[index].size,
       altText: draft.title,
       sortOrder: draft.media.length + index,
     })),
@@ -283,12 +371,25 @@ async function submitDraft(actor, draftId, payload) {
     throw new ApiError(400, "Upload at least one product image before submitting for verification.");
   }
 
-  return productRepository.updateDraft(draftId, {
+  const updatedDraft = await productRepository.updateDraft(draftId, {
     status: "ADMIN_REVIEW",
     submissionNotes: payload.submissionNotes || null,
     submittedAt: new Date(),
     verificationNotes: null,
   });
+
+  await notificationService.createNotification({
+    userId: draft.artisanId,
+    type: "PRODUCT_DRAFT_SUBMITTED",
+    title: "Draft submitted for review",
+    message: `${draft.title} has been submitted for verification.`,
+    metadata: {
+      draftId,
+      notes: payload.submissionNotes || null,
+    },
+  });
+
+  return updatedDraft;
 }
 
 async function createUniqueSlug(tx, title, fallbackId, existingSlug) {
@@ -555,9 +656,9 @@ async function reviewSample(reviewerId, sampleId, payload) {
 
   await notificationService.createNotification({
     userId: sample.artisanId,
-    type: "PRODUCT_APPROVED",
-    title: "Sample approved",
-    message: `${sample.title} has been approved and a product draft was created for verification.`,
+    type: "PRODUCT_DRAFT_CREATED",
+    title: "Verification draft created",
+    message: `${sample.title} was approved. A product draft is now in the verification pipeline.`,
     metadata: { sampleId, draftId: draft.id },
   });
 
@@ -596,11 +697,12 @@ async function publishProduct(productId, actorId) {
 
   await notificationService.createNotification({
     userId: publishedProduct.artisanId,
-    type: "GENERAL",
+    type: "PRODUCT_PUBLISHED",
     title: "Product published",
     message: `${publishedProduct.title} is now live in the marketplace.`,
     metadata: {
       productId: publishedProduct.id,
+      draftId: publishedProduct.draftId,
     },
   });
 
@@ -755,10 +857,13 @@ module.exports = {
   listArtisanSamples,
   getArtisanSample,
   listArtisanDrafts,
+  listArtisanPublishedProducts,
   getArtisanDraft,
   updateDraft,
   uploadDraftImages,
   updateSample,
+  resubmitSample,
+  deleteArtisanSample,
   uploadSampleImages,
   submitDraft,
   reviewDraft,

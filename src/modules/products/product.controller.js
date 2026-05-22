@@ -66,11 +66,20 @@ const getSampleAdmin = asyncHandler(async (req, res) => {
 });
 
 const listDrafts = asyncHandler(async (req, res) => {
-  const drafts = await productService.listArtisanDrafts(req.user.id);
+  const drafts = await productService.listArtisanDrafts(req.user.id, req.query);
 
   res.status(200).json({
     message: "Product drafts fetched successfully.",
     data: drafts,
+  });
+});
+
+const listPublishedProducts = asyncHandler(async (req, res) => {
+  const products = await productService.listArtisanPublishedProducts(req.user.id, req.query);
+
+  res.status(200).json({
+    message: "Published products fetched successfully.",
+    data: products,
   });
 });
 
@@ -134,6 +143,24 @@ const updateSample = asyncHandler(async (req, res) => {
   res.status(200).json({
     message: "Product sample updated successfully.",
     data: sample,
+  });
+});
+
+const resubmitSample = asyncHandler(async (req, res) => {
+  const sample = await productService.resubmitSample(req.user.id, req.params.sampleId);
+
+  res.status(200).json({
+    message: "Product sample resubmitted for review.",
+    data: sample,
+  });
+});
+
+const deleteArtisanSample = asyncHandler(async (req, res) => {
+  const result = await productService.deleteArtisanSample(req.user.id, req.params.sampleId);
+
+  res.status(200).json({
+    message: "Product sample deleted successfully.",
+    data: result,
   });
 });
 
@@ -214,6 +241,7 @@ module.exports = {
   createSample,
   listSamples,
   listDrafts,
+  listPublishedProducts,
   getSample,
   getDraft,
   updateDraft,
@@ -230,6 +258,8 @@ module.exports = {
   listAllSamples,
   getSampleAdmin,
   updateSample,
+  resubmitSample,
+  deleteArtisanSample,
   getDraftAdmin,
   listDraftsAdmin,
   deleteSampleAdmin,

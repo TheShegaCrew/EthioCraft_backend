@@ -19,7 +19,17 @@ const markAsRead = asyncHandler(async (req, res) => {
   });
 });
 
+const clearRead = asyncHandler(async (req, res) => {
+  const result = await notificationService.clearReadNotifications(req.user.id);
+
+  res.status(200).json({
+    message: "Read notifications cleared successfully.",
+    data: result,
+  });
+});
+
 module.exports = {
   listNotifications,
   markAsRead,
+  clearRead,
 };

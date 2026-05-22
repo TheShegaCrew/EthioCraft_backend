@@ -37,10 +37,20 @@ function markAsRead(notificationId) {
   });
 }
 
+function deleteReadByUser(userId) {
+  return prisma.notification.deleteMany({
+    where: {
+      userId,
+      isRead: true,
+    },
+  });
+}
+
 module.exports = {
   createNotification,
   createManyNotifications,
   findById,
   listByUser,
   markAsRead,
+  deleteReadByUser,
 };

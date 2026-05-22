@@ -2,10 +2,13 @@
 const path = require("path");
 const multer = require("multer");
 const env = require("./env");
+const { isConfigured: cloudinaryConfigured } = require("./cloudinary");
 
-fs.mkdirSync(env.uploadDir, { recursive: true });
+if (!cloudinaryConfigured) {
+  fs.mkdirSync(env.uploadDir, { recursive: true });
+}
 
-const storage = multer.diskStorage({
+const diskStorage = multer.diskStorage({
   destination: (_req, _file, callback) => {
     callback(null, env.uploadDir);
   },
@@ -16,7 +19,16 @@ const storage = multer.diskStorage({
   },
 });
 
-const allowedMimeTypes = ["image/jpeg", "image/png", "image/webp"];
+const storage = cloudinaryConfigured ? multer.memoryStorage() : diskStorage;
+
+const allowedMimeTypes = [
+  "image/jpeg",
+  "image/jpg",
+  "image/pjpeg",
+  "image/png",
+  "image/webp",
+  "image/x-png",
+];
 
 module.exports = multer({
   storage,

@@ -147,7 +147,18 @@ const notificationPayloadSchema = z.object({
   body: z.object({
     title: z.string().min(1).max(100),
     message: z.string().min(1).max(1000),
-    type: z.enum(["GENERAL", "PRODUCT_APPROVED", "PRODUCT_REJECTED", "ORDER_PLACED", "ORDER_SHIPPED", "PAYMENT_SUCCESS", "PAYMENT_FAILED"]).optional().default("GENERAL"),
+    type: z.enum([
+      "GENERAL",
+      "PRODUCT_APPROVED",
+      "PRODUCT_REJECTED",
+      "PRODUCT_DRAFT_CREATED",
+      "PRODUCT_DRAFT_SUBMITTED",
+      "PRODUCT_PUBLISHED",
+      "ORDER_PLACED",
+      "ORDER_SHIPPED",
+      "PAYMENT_SUCCESS",
+      "PAYMENT_FAILED",
+    ]).optional().default("GENERAL"),
   }),
 });
 
