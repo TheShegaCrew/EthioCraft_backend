@@ -33,11 +33,11 @@ function assertOrderAccess(user, order) {
 
 function buildTimeline(order) {
   return [
-    { status: "PENDING_PAYMENT", at: order.createdAt },
-    ...(order.paidAt ? [{ status: "PAID", at: order.paidAt }] : []),
-    ...(order.shippedAt ? [{ status: "SHIPPED", at: order.shippedAt }] : []),
-    ...(order.deliveredAt ? [{ status: "DELIVERED", at: order.deliveredAt }] : []),
-    ...(order.cancelledAt ? [{ status: "CANCELLED", at: order.cancelledAt }] : []),
+    { status: "PENDING_PAYMENT", timestamp: order.createdAt, location: null, description: "Order pending payment", note: null },
+    ...(order.paidAt ? [{ status: "PAID", timestamp: order.paidAt, location: null, description: "Payment received", note: null }] : []),
+    ...(order.shippedAt ? [{ status: "SHIPPED", timestamp: order.shippedAt, location: null, description: "Order shipped", note: null }] : []),
+    ...(order.deliveredAt ? [{ status: "DELIVERED", timestamp: order.deliveredAt, location: null, description: "Order delivered", note: null }] : []),
+    ...(order.cancelledAt ? [{ status: "CANCELLED", timestamp: order.cancelledAt, location: null, description: "Order cancelled", note: null }] : []),
   ];
 }
 
@@ -209,8 +209,13 @@ async function getOrderTracking(user, orderId) {
 
   return {
     orderId: order.id,
-    currentStatus: order.status,
-    timeline: buildTimeline(order),
+    shipmentStatus: order.status,
+    carrier: null,
+    trackingNumber: null,
+    estimatedDeliveryDate: order.estimatedDeliveryDate || null,
+    shippedAt: order.shippedAt || null,
+    deliveredAt: order.deliveredAt || null,
+    events: buildTimeline(order),
   };
 }
 

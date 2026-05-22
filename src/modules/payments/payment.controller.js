@@ -51,14 +51,16 @@ const handleCallback = asyncHandler(async (req, res) => {
   const { tx_ref } = req.query;
   const payment = await paymentService.syncPaymentStatus(tx_ref);
 
+  const frontendUrl = require("../../config/env").frontendUrl;
+
   if (!payment) {
-    return res.status(404).send("Payment not found");
+    return res.redirect(`${frontendUrl}/checkout/confirmation?status=not_found`);
   }
 
   if (payment.status === "SUCCESS") {
-    return res.redirect("/payments/success");
+    return res.redirect(`${frontendUrl}/checkout/confirmation?status=success&orderId=${payment.orderId}&tx_ref=${tx_ref}`);
   }
-  return res.redirect("/payments/failure");
+  return res.redirect(`${frontendUrl}/checkout/confirmation?status=failed&orderId=${payment.orderId}&tx_ref=${tx_ref}`);
 });
 
 module.exports = {
