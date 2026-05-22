@@ -17,6 +17,20 @@ const sampleBody = draftBody.partial().refine((v) => Object.keys(v).length > 0, 
   message: "At least one sample field must be supplied.",
 });
 
+/** Artisan sample submission — required core fields; price/stock optional. */
+const createSampleBody = z.object({
+  title: z.string().trim().min(3).max(150),
+  description: z.string().trim().min(20).max(5000),
+  category: z.string().trim().min(2).max(120),
+  price: z.number().positive().optional(),
+  stock: z.number().int().nonnegative().optional(),
+  materials: z.array(z.string().trim().min(1).max(100)).max(20).optional(),
+  tags: z.array(z.string().trim().min(1).max(50)).max(20).optional(),
+  dimensions: z.record(z.any()).optional(),
+  culturalMetadata: z.record(z.any()).optional(),
+  extensionData: z.record(z.any()).optional(),
+});
+
 const submitBody = z.object({
   submissionNotes: z.string().trim().max(500).optional(),
 });
@@ -33,6 +47,18 @@ const reviewSampleBody = z.object({
 
 const adminProductParams = z.object({
   productId: z.string().min(1),
+});
+
+const artisanListQuery = z.object({
+  query: z.object({
+    status: z.string().trim().optional(),
+  }).optional(),
+});
+
+const artisanPublishedQuery = z.object({
+  query: z.object({
+    status: z.enum(["APPROVED", "PUBLISHED", "ARCHIVED", "ALL"]).optional(),
+  }).optional(),
 });
 
 const adminProductUpdateBody = z.object({
@@ -62,10 +88,12 @@ module.exports = {
   }),
   submitDraftSchema: z.object({ body: submitBody }),
   reviewDraftSchema: z.object({ body: reviewBody }),
-  createSampleSchema: z.object({ body: sampleBody }),
+  createSampleSchema: z.object({ body: createSampleBody }),
   updateSampleSchema: z.object({ body: sampleBody.optional() }),
   adminSampleParamsSchema: z.object({ params: z.object({ sampleId: z.string().min(1) }) }),
   reviewSampleSchema: z.object({ body: reviewSampleBody }),
   adminProductParamsSchema: z.object({ params: adminProductParams }),
   updateAdminProductSchema: z.object({ params: adminProductParams, body: adminProductUpdateBody }),
+  artisanListQuerySchema: artisanListQuery,
+  artisanPublishedQuerySchema: artisanPublishedQuery,
 };

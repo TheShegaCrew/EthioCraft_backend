@@ -27,9 +27,15 @@ async function markNotificationAsRead(userId, notificationId) {
   return notificationRepository.markAsRead(notificationId);
 }
 
+async function clearReadNotifications(userId) {
+  const result = await notificationRepository.deleteReadByUser(userId);
+  return { deletedCount: result.count };
+}
+
 module.exports = {
   createNotification,
   createManyNotifications,
   getUserNotifications,
   markNotificationAsRead,
+  clearReadNotifications,
 };

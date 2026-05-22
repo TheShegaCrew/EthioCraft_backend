@@ -21,6 +21,17 @@ const publicUserSelect = {
       extensionData: true,
     },
   },
+  artisanBankDetail: {
+    select: {
+      bankName: true,
+      accountNumber: true,
+      accountHolderName: true,
+      branch: true,
+      accountType: true,
+      currency: true,
+      verifiedAt: true,
+    },
+  },
 };
 
 const draftInclude = {

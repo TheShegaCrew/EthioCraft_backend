@@ -3,6 +3,23 @@ const dotenv = require("dotenv");
 
 dotenv.config();
 
+function parseCloudinaryUrl(url) {
+  if (!url) {
+    return {};
+  }
+  const match = url.trim().match(/^cloudinary:\/\/([^:]+):([^@]+)@(.+)$/);
+  if (!match) {
+    return {};
+  }
+  return {
+    cloudinaryApiKey: match[1],
+    cloudinaryApiSecret: match[2],
+    cloudinaryCloudName: match[3],
+  };
+}
+
+const cloudinaryFromUrl = parseCloudinaryUrl(process.env.CLOUDINARY_URL);
+
 const port = Number(process.env.PORT || 4000);
 
 module.exports = {
@@ -33,4 +50,10 @@ module.exports = {
   smtpFrom: process.env.SMTP_FROM || process.env.SMTP_USER || "",
   otpTtlMinutes: Number(process.env.OTP_TTL_MINUTES || 10),
   otpMaxAttempts: Number(process.env.OTP_MAX_ATTEMPTS || 5),
+  cloudinaryCloudName:
+    process.env.CLOUDINARY_CLOUD_NAME || cloudinaryFromUrl.cloudinaryCloudName || "",
+  cloudinaryApiKey: process.env.CLOUDINARY_API_KEY || cloudinaryFromUrl.cloudinaryApiKey || "",
+  cloudinaryApiSecret:
+    process.env.CLOUDINARY_API_SECRET || cloudinaryFromUrl.cloudinaryApiSecret || "",
+  cloudinaryUrl: process.env.CLOUDINARY_URL || "",
 };
