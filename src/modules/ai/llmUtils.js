@@ -22,7 +22,7 @@ const crypto = require('crypto');
 const CONFIG = {
   // Gemini
   geminiApiKey: process.env.GEMINI_API_KEY || '',
-  geminiModel: process.env.GEMINI_MODEL || 'gemini-1.5-flash',
+  geminiModel: process.env.GEMINI_MODEL || 'gemini-2.5-flash',
 
   // Hugging Face
   hfApiKey: process.env.HF_API_KEY || '',
