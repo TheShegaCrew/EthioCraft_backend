@@ -1,4 +1,4 @@
-﻿const notificationRepository = require("./notification.repository");
+const notificationRepository = require("./notification.repository");
 const ApiError = require("../../utils/apiError");
 
 function createNotification(payload) {
@@ -32,10 +32,25 @@ async function clearReadNotifications(userId) {
   return { deletedCount: result.count };
 }
 
+async function notifyAdmins(payload) {
+  const admins = await notificationRepository.getActiveAdmins();
+  if (!admins || admins.length === 0) {
+    return { count: 0 };
+  }
+
+  const notifications = admins.map((admin) => ({
+    ...payload,
+    userId: admin.id,
+  }));
+
+  return notificationRepository.createManyNotifications(notifications);
+}
+
 module.exports = {
   createNotification,
   createManyNotifications,
   getUserNotifications,
   markNotificationAsRead,
   clearReadNotifications,
+  notifyAdmins,
 };

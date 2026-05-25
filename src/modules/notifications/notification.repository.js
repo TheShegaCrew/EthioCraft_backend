@@ -1,4 +1,4 @@
-﻿const prisma = require("../../config/prisma");
+const prisma = require("../../config/prisma");
 
 function createNotification(data) {
   return prisma.notification.create({
@@ -46,6 +46,13 @@ function deleteReadByUser(userId) {
   });
 }
 
+function getActiveAdmins() {
+  return prisma.user.findMany({
+    where: { role: "ADMIN", status: "ACTIVE" },
+    select: { id: true },
+  });
+}
+
 module.exports = {
   createNotification,
   createManyNotifications,
@@ -53,4 +60,5 @@ module.exports = {
   listByUser,
   markAsRead,
   deleteReadByUser,
+  getActiveAdmins,
 };

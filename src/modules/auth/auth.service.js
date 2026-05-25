@@ -1,10 +1,11 @@
-﻿const bcrypt = require("bcryptjs");
+const bcrypt = require("bcryptjs");
 const crypto = require("crypto");
 const authRepository = require("./auth.repository");
 const ApiError = require("../../utils/apiError");
 const { generateAccessToken } = require("../../utils/jwt");
 const env = require("../../config/env");
 const { sendOtpEmail } = require("../../utils/mailer");
+const notificationService = require("../notifications/notification.service");
 
 const EMAIL_VERIFICATION_PURPOSE = "EMAIL_VERIFICATION";
 const PASSWORD_RESET_PURPOSE = "PASSWORD_RESET";
@@ -92,6 +93,16 @@ async function registerUser(payload) {
   });
 
   await issueEmailVerificationOtp(user);
+
+  if (payload.role === "ARTISAN") {
+    const shopName = payload.artisanProfile?.shopName || "Unknown Shop";
+    await notificationService.notifyAdmins({
+      type: "GENERAL",
+      title: "New Artisan Registration",
+      message: `A new artisan account (${shopName}) has registered and requires review.`,
+      metadata: { userId: user.id },
+    });
+  }
 
   return {
     user,
