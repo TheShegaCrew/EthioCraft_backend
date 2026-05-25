@@ -80,6 +80,13 @@ async function createSample(artisanId, payload) {
     metadata: { sampleId: sample.id },
   });
 
+  await notificationService.notifyAdmins({
+    type: "GENERAL",
+    title: "New Sample Submitted",
+    message: `Sample '${sample.title}' has been submitted and is awaiting verification.`,
+    metadata: { sampleId: sample.id },
+  });
+
   return sample;
 }
 
@@ -194,6 +201,13 @@ async function resubmitSample(artisanId, sampleId) {
     type: "GENERAL",
     title: "Sample resubmitted",
     message: `${sample.title} was resubmitted for admin review.`,
+    metadata: { sampleId },
+  });
+
+  await notificationService.notifyAdmins({
+    type: "GENERAL",
+    title: "Sample Resubmitted",
+    message: `Sample '${sample.title}' was resubmitted and is awaiting verification.`,
     metadata: { sampleId },
   });
 
@@ -387,6 +401,13 @@ async function submitDraft(actor, draftId, payload) {
       draftId,
       notes: payload.submissionNotes || null,
     },
+  });
+
+  await notificationService.notifyAdmins({
+    type: "GENERAL",
+    title: "Draft Submitted for Review",
+    message: `Product draft '${draft.title}' has been submitted for final admin review.`,
+    metadata: { draftId },
   });
 
   return updatedDraft;
