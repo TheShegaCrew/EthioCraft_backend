@@ -21,7 +21,7 @@ router.use("/marketplace", marketplaceRoutes);
 // Protected Routes
 router.use("/users", authenticate, userRoutes);
 router.use("/orders", authenticate, orderRoutes);
-router.use("/payments", authenticate, paymentRoutes);
+router.use("/payments", paymentRoutes);
 router.use("/notifications", authenticate, notificationRoutes);
 router.use("/ai", authenticate, aiRoutes);
 router.use("/admin", authenticate, adminRoutes);
