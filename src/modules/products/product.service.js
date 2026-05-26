@@ -249,8 +249,8 @@ async function listArtisanPublishedProducts(artisanId, query = {}) {
   return productRepository.listProductsByArtisan(artisanId, query);
 }
 
-async function listDraftsAdmin(query) {
-  const { status, search } = query;
+async function listDraftsAdmin(query, user = null) {
+  const { status, search, assigned } = query;
   const where = {};
 
   if (status && status !== "ALL") {
@@ -264,6 +264,12 @@ async function listDraftsAdmin(query) {
       { artisan: { firstName: { contains: search, mode: "insensitive" } } },
       { artisan: { lastName: { contains: search, mode: "insensitive" } } },
     ];
+  }
+
+  // If requested, limit to drafts that originate from samples assigned to this verification agent
+  if (assigned === 'true' && user && user.role === 'VERIFICATION_AGENT') {
+    // Filter by related sample.assignedVerifierId === user.id
+    where.sample = { assignedVerifierId: user.id };
   }
 
   return prisma.productDraft.findMany({
@@ -319,6 +325,17 @@ async function updateDraft(actor, draftId, payload) {
     if (draft.status === "PUBLISHED") {
       throw new ApiError(409, "Published drafts cannot be edited.");
     }
+
+    // Verification agents must be explicitly assigned to the originating sample for verification
+    if (actor.role === "VERIFICATION_AGENT") {
+      if (!draft.sampleId) {
+        throw new ApiError(403, "You are not assigned to verify this draft.");
+      }
+      const sample = await productRepository.findSampleById(draft.sampleId);
+      if (!sample || sample.assignedVerifierId !== actor.id) {
+        throw new ApiError(403, "You are not assigned to verify this draft.");
+      }
+    }
   }
 
   const mapped = mapDraftPayload(payload, { partial: true });
@@ -343,6 +360,17 @@ async function uploadDraftImages(actor, draftId, files) {
   } else {
     if (draft.status === "PUBLISHED") {
       throw new ApiError(409, "Cannot upload images to a published draft.");
+    }
+
+    // Verification agents must be assigned to the originating sample to upload verified media
+    if (actor.role === "VERIFICATION_AGENT") {
+      if (!draft.sampleId) {
+        throw new ApiError(403, "You are not assigned to verify this draft.");
+      }
+      const sample = await productRepository.findSampleById(draft.sampleId);
+      if (!sample || sample.assignedVerifierId !== actor.id) {
+        throw new ApiError(403, "You are not assigned to verify this draft.");
+      }
     }
   }
 
@@ -439,6 +467,18 @@ async function reviewDraft(reviewerId, draftId, payload) {
 
   if (draft.status !== "ADMIN_REVIEW" && draft.status !== "AGENT_VERIFIED") {
     throw new ApiError(409, "Only submitted drafts can be reviewed.");
+  }
+
+  // If reviewer is a verification agent, ensure they are assigned to the originating sample
+  const reviewer = await prisma.user.findUnique({ where: { id: reviewerId } });
+  if (reviewer.role === "VERIFICATION_AGENT") {
+    if (!draft.sampleId) {
+      throw new ApiError(403, "You are not assigned to review this draft.");
+    }
+    const sample = await productRepository.findSampleById(draft.sampleId);
+    if (!sample || sample.assignedVerifierId !== reviewerId) {
+      throw new ApiError(403, "You are not assigned to review this draft.");
+    }
   }
 
   const now = new Date();

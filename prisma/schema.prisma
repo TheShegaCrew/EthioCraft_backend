@@ -135,6 +135,8 @@ enum MediaKind {
   IMAGE
   DOCUMENT
   AVATAR
+  VIDEO
+  MODEL_3D
 }
 
 model User {

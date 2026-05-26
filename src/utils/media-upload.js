@@ -10,7 +10,7 @@ function uploadBufferToCloudinary(buffer, originalname) {
     const stream = cloudinary.uploader.upload_stream(
       {
         folder: UPLOAD_FOLDER,
-        resource_type: "image",
+        resource_type: "auto",
       },
       (error, result) => {
         if (error) {

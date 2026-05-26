@@ -11,6 +11,7 @@ const aiRoutes = require("../modules/ai/ai.routes");
 const adminRoutes = require("../modules/admin/admin.routes");
 const wishlistRoutes = require("../modules/wishlist/wishlist.routes");
 const cartRoutes = require("../modules/cart/cart.routes");
+const mediaRoutes = require("../modules/media/media.routes");
 
 const router = express.Router();
 
@@ -27,6 +28,7 @@ router.use("/ai", authenticate, aiRoutes);
 router.use("/admin", authenticate, adminRoutes);
 router.use("/wishlist", authenticate, wishlistRoutes);
 router.use("/cart", authenticate, cartRoutes);
+router.use("/uploads", mediaRoutes);
 
 // Public Root/Fallback Routes
 router.use("/", productRoutes);
