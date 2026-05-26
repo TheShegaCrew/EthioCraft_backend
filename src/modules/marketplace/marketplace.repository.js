@@ -11,7 +11,6 @@ function listPublishedProducts(where, orderBy, skip, take) {
         orderBy: {
           sortOrder: "asc",
         },
-        take: 1,
       },
       artisan: {
         select: {
@@ -102,7 +101,6 @@ function listRelatedPublishedProducts({ category, excludeProductId, take = 3 }) 
         orderBy: {
           sortOrder: "asc",
         },
-        take: 1,
       },
       _count: {
         select: {
@@ -153,7 +151,6 @@ const productListInclude = {
     orderBy: {
       sortOrder: "asc",
     },
-    take: 1,
   },
   artisan: {
     select: {
