@@ -17,6 +17,10 @@
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 const axios = require('axios');
 const crypto = require('crypto');
+const dns = require('dns');
+
+// Force IPv4 first to prevent 'fetch failed' and 'ENOTFOUND' errors on Windows/Node.js
+dns.setDefaultResultOrder('ipv4first');
 
 // ─── Configuration ────────────────────────────────────────────────────────────
 const CONFIG = {
