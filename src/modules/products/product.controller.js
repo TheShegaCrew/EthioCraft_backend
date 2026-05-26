@@ -84,7 +84,8 @@ const listPublishedProducts = asyncHandler(async (req, res) => {
 });
 
 const listDraftsAdmin = asyncHandler(async (req, res) => {
-  const drafts = await productService.listDraftsAdmin(req.query);
+  // Pass authenticated user so service can apply 'assigned' filtering for verification agents
+  const drafts = await productService.listDraftsAdmin(req.query, req.user);
 
   res.status(200).json({
     message: "All product drafts fetched successfully.",

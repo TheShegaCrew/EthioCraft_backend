@@ -15,7 +15,7 @@ const ORDER_TRANSITIONS = {
   CANCELLED: [],
 };
 
-function assertOrderAccess(user, order) {
+async function assertOrderAccess(user, order) {
   if (user.role === "ADMIN") {
     return;
   }
@@ -26,6 +26,25 @@ function assertOrderAccess(user, order) {
 
   if (user.role === "ARTISAN" && order.items.some((item) => item.artisanId === user.id)) {
     return;
+  }
+
+  if (user.role === "VERIFICATION_AGENT") {
+    // Allow access only if the order's shipping address region or city matches the agent's configured service area.
+    const agent = await prisma.user.findUnique({ where: { id: user.id }, include: { artisanProfile: true, addresses: true } });
+    const agentRegion = agent?.artisanProfile?.region;
+    const defaultAddr = (agent?.addresses || []).find((a) => a.isDefault) || (agent?.addresses || [])[0];
+    const agentCity = defaultAddr?.city || null;
+
+    const orderRegion = order?.shippingAddress?.region;
+    const orderCity = order?.shippingAddress?.city;
+
+    if (agentRegion && orderRegion && orderRegion.toLowerCase().includes(agentRegion.toLowerCase())) {
+      return;
+    }
+
+    if (agentCity && orderCity && orderCity.toLowerCase().includes(agentCity.toLowerCase())) {
+      return;
+    }
   }
 
   throw new ApiError(404, "Order was not found.");
@@ -176,6 +195,27 @@ async function listOrders(user, query) {
         },
       },
     };
+  } else if (user.role === "VERIFICATION_AGENT") {
+    // Scope orders to the agent's configured region or service city
+    const agent = await prisma.user.findUnique({ where: { id: user.id }, include: { artisanProfile: true, addresses: true } });
+    const agentRegion = agent?.artisanProfile?.region;
+    const defaultAddr = (agent?.addresses || []).find((a) => a.isDefault) || (agent?.addresses || [])[0];
+    const agentCity = defaultAddr?.city || null;
+
+    if (!agentRegion && !agentCity) {
+      // If agent has no region/city configured, deny access
+      throw new ApiError(403, "Agent region is not configured.");
+    }
+
+    const shippingConditions = [];
+    if (agentRegion) {
+      shippingConditions.push({ shippingAddress: { is: { region: { contains: agentRegion, mode: 'insensitive' } } } });
+    }
+    if (agentCity) {
+      shippingConditions.push({ shippingAddress: { is: { city: { contains: agentCity, mode: 'insensitive' } } } });
+    }
+
+    where = shippingConditions.length === 1 ? shippingConditions[0] : { OR: shippingConditions };
   } else if (user.role !== "ADMIN") {
     throw new ApiError(403, "This role cannot access order history.");
   }
@@ -200,7 +240,7 @@ async function getOrderById(user, orderId) {
     throw new ApiError(404, "Order was not found.");
   }
 
-  assertOrderAccess(user, order);
+  await assertOrderAccess(user, order);
   return order;
 }
 
@@ -226,7 +266,7 @@ async function updateOrderStatus(user, orderId, nextStatus) {
     throw new ApiError(404, "Order was not found.");
   }
 
-  assertOrderAccess(user, order);
+  await assertOrderAccess(user, order);
 
   const allowedStatusesForRole = user.role === "CUSTOMER" ? ["CANCELLED"] : ["PROCESSING", "SHIPPED", "DELIVERED", "CANCELLED"];
 
