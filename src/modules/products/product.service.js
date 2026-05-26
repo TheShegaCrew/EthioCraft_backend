@@ -441,6 +441,38 @@ async function submitDraft(actor, draftId, payload) {
   return updatedDraft;
 }
 
+async function verifyDraft(actor, draftId, payload) {
+  const draft = await productRepository.findDraftById(draftId);
+
+  if (!draft) {
+    throw new ApiError(404, "Product draft was not found.");
+  }
+
+  if (actor.role === "VERIFICATION_AGENT") {
+    if (!draft.sampleId) {
+      throw new ApiError(403, "You are not assigned to verify this draft.");
+    }
+    const sample = await productRepository.findSampleById(draft.sampleId);
+    if (!sample || sample.assignedVerifierId !== actor.id) {
+      throw new ApiError(403, "You are not assigned to verify this draft.");
+    }
+  }
+
+  const updatedDraft = await productRepository.updateDraft(draftId, {
+    status: "AGENT_VERIFIED",
+    verificationNotes: payload.notes || null,
+  });
+
+  await notificationService.notifyAdmins({
+    type: "GENERAL",
+    title: "Draft Agent Verified",
+    message: `Product draft '${draft.title}' has been verified by an agent and is ready for final admin review.`,
+    metadata: { draftId },
+  });
+
+  return updatedDraft;
+}
+
 async function createUniqueSlug(tx, title, fallbackId, existingSlug) {
   if (existingSlug) {
     return existingSlug;
@@ -927,6 +959,7 @@ module.exports = {
   deleteArtisanSample,
   uploadSampleImages,
   submitDraft,
+  verifyDraft,
   reviewDraft,
   reviewSample,
   createDraftFromSample,

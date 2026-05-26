@@ -173,6 +173,15 @@ const submitDraft = asyncHandler(async (req, res) => {
   });
 });
 
+const verifyDraft = asyncHandler(async (req, res) => {
+  const draft = await productService.verifyDraft(req.user, req.params.draftId, req.validated.body);
+
+  res.status(200).json({
+    message: "Product draft marked as agent verified.",
+    data: draft,
+  });
+});
+
 const reviewSample = asyncHandler(async (req, res) => {
   const outcome = await productService.reviewSample(req.user.id, req.params.sampleId, req.validated.body);
 
@@ -248,6 +257,7 @@ module.exports = {
   uploadDraftImages,
   uploadSampleImages,
   submitDraft,
+  verifyDraft,
   reviewDraft,
   reviewSample,
   createDraftFromSample,

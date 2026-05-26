@@ -9,6 +9,7 @@ const {
   updateSampleSchema,
   updateDraftSchema,
   submitDraftSchema,
+  verifyDraftSchema,
   reviewDraftSchema,
   createSampleSchema,
   reviewSampleSchema,
@@ -136,6 +137,12 @@ router.delete(
   authorize(roles.ADMIN),
   validate(adminSampleParamsSchema),
   productController.deleteSampleAdmin,
+);
+router.patch(
+  "/verifications/products/drafts/:draftId/verify",
+  authorize(roles.VERIFICATION_AGENT, roles.ADMIN),
+  validate(verifyDraftSchema),
+  productController.verifyDraft,
 );
 
 router.patch(
