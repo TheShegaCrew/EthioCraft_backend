@@ -4,7 +4,18 @@ const { publicUserSelect } = require("../../constants/db-selects");
 function findProfileById(userId) {
   return prisma.user.findUnique({
     where: { id: userId },
-    select: publicUserSelect,
+    select: {
+      ...publicUserSelect,
+      addresses: {
+        orderBy: [{ isDefault: 'desc' }, { createdAt: 'desc' }],
+        select: {
+          id: true,
+          city: true,
+          region: true,
+          isDefault: true,
+        },
+      },
+    },
   });
 }
 

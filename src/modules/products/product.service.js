@@ -94,6 +94,8 @@ async function listArtisanSamples(artisanId) {
   return productRepository.listSamplesByArtisan(artisanId);
 }
 
+
+
 async function listAllSamples() {
   return productRepository.listAllSamples();
 }
@@ -214,6 +216,7 @@ async function resubmitSample(artisanId, sampleId) {
   return updated;
 }
 
+
 async function deleteArtisanSample(artisanId, sampleId) {
   const sample = await productRepository.findSampleById(sampleId);
 
@@ -239,7 +242,7 @@ async function deleteArtisanSample(artisanId, sampleId) {
   await prisma.sample.delete({ where: { id: sampleId } });
 
   return { deletedId: sampleId };
-}
+} 
 
 async function listArtisanDrafts(artisanId, query = {}) {
   return productRepository.listDraftsByArtisan(artisanId, query);
@@ -441,38 +444,6 @@ async function submitDraft(actor, draftId, payload) {
   return updatedDraft;
 }
 
-async function verifyDraft(actor, draftId, payload) {
-  const draft = await productRepository.findDraftById(draftId);
-
-  if (!draft) {
-    throw new ApiError(404, "Product draft was not found.");
-  }
-
-  if (actor.role === "VERIFICATION_AGENT") {
-    if (!draft.sampleId) {
-      throw new ApiError(403, "You are not assigned to verify this draft.");
-    }
-    const sample = await productRepository.findSampleById(draft.sampleId);
-    if (!sample || sample.assignedVerifierId !== actor.id) {
-      throw new ApiError(403, "You are not assigned to verify this draft.");
-    }
-  }
-
-  const updatedDraft = await productRepository.updateDraft(draftId, {
-    status: "AGENT_VERIFIED",
-    verificationNotes: payload.notes || null,
-  });
-
-  await notificationService.notifyAdmins({
-    type: "GENERAL",
-    title: "Draft Agent Verified",
-    message: `Product draft '${draft.title}' has been verified by an agent and is ready for final admin review.`,
-    metadata: { draftId },
-  });
-
-  return updatedDraft;
-}
-
 async function createUniqueSlug(tx, title, fallbackId, existingSlug) {
   if (existingSlug) {
     return existingSlug;
@@ -561,6 +532,9 @@ async function reviewDraft(reviewerId, draftId, payload) {
     };
   }
 
+  // When admin approves, auto-publish the product; verification agents only mark as approved
+  const isAdminApproval = reviewer.role === "ADMIN";
+
   const approvedProduct = await prisma.$transaction(async (tx) => {
     const existingProduct = await tx.product.findUnique({ where: { draftId } });
 
@@ -581,8 +555,9 @@ async function reviewDraft(reviewerId, draftId, payload) {
       dimensions: draft.dimensions,
       culturalMetadata: draft.culturalMetadata,
       extensionData: draft.extensionData,
-      status: "APPROVED",
+      status: isAdminApproval ? "PUBLISHED" : "APPROVED",
       approvedAt: now,
+      publishedAt: isAdminApproval ? now : null,
       verifiedById: reviewerId,
     };
 
@@ -609,12 +584,19 @@ async function reviewDraft(reviewerId, draftId, payload) {
       });
     }
 
+    const notificationTitle = isAdminApproval 
+      ? "Product approved and published" 
+      : "Product approved";
+    const notificationMessage = isAdminApproval
+      ? `${draft.title} has been approved and is now live in the marketplace.`
+      : `${draft.title} has been verified and approved.`;
+
     await tx.notification.create({
       data: {
         userId: draft.artisanId,
         type: "PRODUCT_APPROVED",
-        title: "Product approved",
-        message: `${draft.title} has been approved and is ready to publish.`,
+        title: notificationTitle,
+        message: notificationMessage,
         metadata: {
           draftId,
           productId: product.id,
@@ -628,14 +610,26 @@ async function reviewDraft(reviewerId, draftId, payload) {
     return tx.product.findUnique({ where: { id: product.id }, include: productInclude });
   });
 
+  // Verify product was created and all relationships are properly loaded
+  if (!approvedProduct || !approvedProduct.id) {
+    throw new ApiError(500, "Failed to create product from draft.");
+  }
+
+  const finalProduct = await productRepository.findProductById(approvedProduct.id);
+
+  if (!finalProduct) {
+    throw new ApiError(500, "Product was created but could not be retrieved.");
+  }
+
   await createAuditLog({
     actorId: reviewerId,
     action: "APPROVE_PRODUCT",
     entityType: "PRODUCT_DRAFT",
     entityId: draftId,
-    description: `Approved draft ${draft.title}.`,
+    description: `Approved draft ${draft.title}${isAdminApproval ? " and published to marketplace" : ""}.`,
     metadata: {
-      productId: approvedProduct.id,
+      productId: finalProduct.id,
+      published: isAdminApproval,
     },
   });
 
@@ -643,7 +637,7 @@ async function reviewDraft(reviewerId, draftId, payload) {
 
   return {
     draft: await productRepository.findDraftById(draftId),
-    product: approvedProduct,
+    product: finalProduct,
   };
 }
 
@@ -748,8 +742,15 @@ async function createDraftFromSample(actorId, sampleId, overrides = {}) {
   return draft;
 }
 
+async function resolveProductByIdOrDraftId(identifier) {
+  let product = await productRepository.findProductById(identifier);
+  if (product) return product;
+
+  return productRepository.findProductByDraftId(identifier);
+}
+
 async function publishProduct(productId, actorId) {
-  const product = await productRepository.findProductById(productId);
+  const product = await resolveProductByIdOrDraftId(productId);
 
   if (!product) {
     throw new ApiError(404, "Approved product was not found.");
@@ -759,7 +760,8 @@ async function publishProduct(productId, actorId) {
     throw new ApiError(409, "Only approved products can be published.");
   }
 
-  const publishedProduct = await productRepository.updateProduct(productId, {
+  const resolvedProductId = product.id;
+  const publishedProduct = await productRepository.updateProduct(resolvedProductId, {
     status: "PUBLISHED",
     publishedAt: new Date(),
   });
@@ -794,16 +796,17 @@ async function publishProduct(productId, actorId) {
 }
 
 async function getAdminProduct(productId) {
-  const product = await productRepository.findProductById(productId);
+  const product = await resolveProductByIdOrDraftId(productId);
 
   if (!product) {
     throw new ApiError(404, "Product was not found.");
   }
 
+  const resolvedProductId = product.id;
   const [salesAgg, reviewAgg] = await Promise.all([
     prisma.orderItem.aggregate({
       where: {
-        productId,
+        productId: resolvedProductId,
         order: {
           status: { in: ["PAID", "PROCESSING", "SHIPPED", "DELIVERED"] },
         },
@@ -812,7 +815,7 @@ async function getAdminProduct(productId) {
       _count: { _all: true },
     }),
     prisma.review.aggregate({
-      where: { productId },
+      where: { productId: resolvedProductId },
       _avg: { rating: true },
       _count: { _all: true },
     }),
@@ -850,12 +853,13 @@ async function getAdminProduct(productId) {
 }
 
 async function updateAdminProduct(productId, payload, actorId) {
-  const product = await productRepository.findProductById(productId);
+  const product = await resolveProductByIdOrDraftId(productId);
 
   if (!product) {
     throw new ApiError(404, "Product was not found.");
   }
 
+  const resolvedProductId = product.id;
   const nextExtensionData = payload.featured === undefined
     ? product.extensionData
     : {
@@ -879,13 +883,13 @@ async function updateAdminProduct(productId, payload, actorId) {
     ...(nextExtensionData !== undefined ? { extensionData: nextExtensionData } : {}),
   };
 
-  const updated = await productRepository.updateProduct(productId, data);
+  const updated = await productRepository.updateProduct(resolvedProductId, data);
 
   await createAuditLog({
     actorId,
     action: "OTHER",
     entityType: "PRODUCT",
-    entityId: productId,
+    entityId: resolvedProductId,
     description: `Updated admin product ${product.title}.`,
     metadata: { payload },
   });
@@ -896,13 +900,14 @@ async function updateAdminProduct(productId, payload, actorId) {
 }
 
 async function deleteAdminProduct(productId, actorId) {
-  const product = await productRepository.findProductById(productId);
+  const product = await resolveProductByIdOrDraftId(productId);
 
   if (!product) {
     throw new ApiError(404, "Product was not found.");
   }
 
-  const archived = await productRepository.updateProduct(productId, {
+  const resolvedProductId = product.id;
+  const archived = await productRepository.updateProduct(resolvedProductId, {
     status: "ARCHIVED",
   });
 
@@ -910,7 +915,7 @@ async function deleteAdminProduct(productId, actorId) {
     actorId,
     action: "OTHER",
     entityType: "PRODUCT",
-    entityId: productId,
+    entityId: resolvedProductId,
     description: `Archived product ${product.title}.`,
     metadata: { previousStatus: product.status },
   });
@@ -918,6 +923,50 @@ async function deleteAdminProduct(productId, actorId) {
   await clearCacheByPrefix("marketplace:products:");
 
   return archived;
+}
+
+async function verifyDraft(actor, draftId, payload) {
+  const draft = await productRepository.findDraftById(draftId);
+
+  if (!draft) {
+    throw new ApiError(404, "Product draft was not found.");
+  }
+
+  // Verification agents must be assigned to the originating sample
+  if (actor.role === "VERIFICATION_AGENT") {
+    if (!draft.sampleId) {
+      throw new ApiError(403, "You are not assigned to verify this draft.");
+    }
+    const sample = await productRepository.findSampleById(draft.sampleId);
+    if (!sample || sample.assignedVerifierId !== actor.id) {
+      throw new ApiError(403, "You are not assigned to verify this draft.");
+    }
+  }
+
+  const updatedDraft = await productRepository.updateDraft(draftId, {
+    status: "AGENT_VERIFIED",
+    verificationNotes: payload.notes || null,
+  });
+
+  await notificationService.createNotification({
+    userId: draft.artisanId,
+    type: "GENERAL",
+    title: "Draft verified by agent",
+    message: `${draft.title} has been verified and is awaiting final admin review.`,
+    metadata: {
+      draftId,
+      notes: payload.notes || null,
+    },
+  });
+
+  await notificationService.notifyAdmins({
+    type: "GENERAL",
+    title: "Draft Verified by Agent",
+    message: `Product draft '${draft.title}' has been verified and is ready for final review.`,
+    metadata: { draftId },
+  });
+
+  return updatedDraft;
 }
 
 module.exports = {

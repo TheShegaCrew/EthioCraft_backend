@@ -78,6 +78,24 @@ async function updateProfile(userId, payload) {
     };
   }
 
+  // If verification agent submitted agentProfile.city, persist it to addresses (upsert default address)
+  if (updatePayload.agentProfile && updatePayload.agentProfile.city) {
+    const city = updatePayload.agentProfile.city
+    const addresses = await userRepository.listAddresses(userId)
+    const defaultAddr = (addresses || []).find((a) => a.isDefault) || (addresses || [])[0]
+
+    if (defaultAddr) {
+      // update existing default address with new city
+      await userRepository.updateAddress(defaultAddr.id, { city })
+    } else {
+      // create a minimal address record for service city
+      const recipient = `${existingUser.firstName || ''} ${existingUser.lastName || ''}`.trim() || 'Agent'
+      await userRepository.createAddress({ userId, city, region: '', recipientName: recipient, phone: existingUser.phone || '', line1: city, isDefault: true })
+    }
+    // remove agentProfile from payload to avoid unknown Prisma field if schema not updated
+    delete updatePayload.agentProfile
+  }
+
   return userRepository.updateProfile(userId, updatePayload);
 }
 
