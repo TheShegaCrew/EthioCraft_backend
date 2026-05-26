@@ -84,7 +84,7 @@ const listPublishedProducts = asyncHandler(async (req, res) => {
 });
 
 const listDraftsAdmin = asyncHandler(async (req, res) => {
-  const drafts = await productService.listDraftsAdmin(req.query, req.user);
+  const drafts = await productService.listDraftsAdmin(req.query);
 
   res.status(200).json({
     message: "All product drafts fetched successfully.",

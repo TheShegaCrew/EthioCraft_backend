@@ -94,6 +94,8 @@ async function listArtisanSamples(artisanId) {
   return productRepository.listSamplesByArtisan(artisanId);
 }
 
+
+
 async function listAllSamples() {
   return productRepository.listAllSamples();
 }
@@ -214,6 +216,7 @@ async function resubmitSample(artisanId, sampleId) {
   return updated;
 }
 
+
 async function deleteArtisanSample(artisanId, sampleId) {
   const sample = await productRepository.findSampleById(sampleId);
 
@@ -239,7 +242,7 @@ async function deleteArtisanSample(artisanId, sampleId) {
   await prisma.sample.delete({ where: { id: sampleId } });
 
   return { deletedId: sampleId };
-}
+} 
 
 async function listArtisanDrafts(artisanId, query = {}) {
   return productRepository.listDraftsByArtisan(artisanId, query);
@@ -435,38 +438,6 @@ async function submitDraft(actor, draftId, payload) {
     type: "GENERAL",
     title: "Draft Submitted for Review",
     message: `Product draft '${draft.title}' has been submitted for final admin review.`,
-    metadata: { draftId },
-  });
-
-  return updatedDraft;
-}
-
-async function verifyDraft(actor, draftId, payload) {
-  const draft = await productRepository.findDraftById(draftId);
-
-  if (!draft) {
-    throw new ApiError(404, "Product draft was not found.");
-  }
-
-  if (actor.role === "VERIFICATION_AGENT") {
-    if (!draft.sampleId) {
-      throw new ApiError(403, "You are not assigned to verify this draft.");
-    }
-    const sample = await productRepository.findSampleById(draft.sampleId);
-    if (!sample || sample.assignedVerifierId !== actor.id) {
-      throw new ApiError(403, "You are not assigned to verify this draft.");
-    }
-  }
-
-  const updatedDraft = await productRepository.updateDraft(draftId, {
-    status: "AGENT_VERIFIED",
-    verificationNotes: payload.notes || null,
-  });
-
-  await notificationService.notifyAdmins({
-    type: "GENERAL",
-    title: "Draft Agent Verified",
-    message: `Product draft '${draft.title}' has been verified by an agent and is ready for final admin review.`,
     metadata: { draftId },
   });
 
@@ -959,7 +930,6 @@ module.exports = {
   deleteArtisanSample,
   uploadSampleImages,
   submitDraft,
-  verifyDraft,
   reviewDraft,
   reviewSample,
   createDraftFromSample,
