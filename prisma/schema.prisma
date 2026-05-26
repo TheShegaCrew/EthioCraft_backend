@@ -292,7 +292,7 @@ model ProductDraft {
 model Product {
   id               String        @id @default(cuid())
   artisanId        String
-  draftId          String        @unique
+  draftId          String?       @unique
   title            String
   slug             String        @unique
   description      String
@@ -312,7 +312,7 @@ model Product {
   createdAt        DateTime      @default(now())
   updatedAt        DateTime      @updatedAt
   artisan          User          @relation("ArtisanProducts", fields: [artisanId], references: [id], onDelete: Cascade)
-  draft            ProductDraft  @relation(fields: [draftId], references: [id], onDelete: Cascade)
+  draft            ProductDraft? @relation(fields: [draftId], references: [id], onDelete: SetNull)
   verifier         User?         @relation("ProductsVerifiedBy", fields: [verifiedById], references: [id])
   media            Media[]       @relation("ProductMedia")
   wishlistItems    WishlistItem[]

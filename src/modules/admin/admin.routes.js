@@ -17,6 +17,7 @@ router.get("/dashboard/verifications", validate(dateRangeQuerySchema), adminCont
 router.get("/dashboard/orders", validate(dateRangeQuerySchema), adminController.getRecentOrders);
 router.get("/dashboard/artisans/top", validate(topArtisanQuerySchema), adminController.getTopArtisans);
 router.get("/dashboard/reports", validate(reportQuerySchema), adminController.getDashboardReports);
+router.get("/reports/pdf", validate(dateRangeQuerySchema), adminController.getDashboardPdf);
 router.get("/audit-logs", validate(dateRangeQuerySchema), adminController.getAuditLogs);
 router.get("/users", validate(userListQuerySchema), adminController.getUsers);
 router.get("/users/role/:role", validate(usersByRoleSchema), adminController.getUsersByRole);

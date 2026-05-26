@@ -562,21 +562,9 @@ async function reviewDraft(reviewerId, draftId, payload) {
   }
 
   const approvedProduct = await prisma.$transaction(async (tx) => {
-    const existingProduct = await tx.product.findUnique({
-      where: { draftId },
-    });
+    const existingProduct = await tx.product.findUnique({ where: { draftId } });
 
     const slug = await createUniqueSlug(tx, draft.title, draft.id, existingProduct?.slug);
-
-    await tx.productDraft.update({
-      where: { id: draftId },
-      data: {
-        status: "PUBLISHED",
-        verificationNotes: payload.notes || null,
-        reviewedAt: now,
-        reviewedById: reviewerId,
-      },
-    });
 
     const productData = {
       artisanId: draft.artisanId,
@@ -599,24 +587,12 @@ async function reviewDraft(reviewerId, draftId, payload) {
     };
 
     const product = existingProduct
-      ? await tx.product.update({
-        where: { id: existingProduct.id },
-        data: productData,
-      })
-      : await tx.product.create({
-        data: productData,
-      });
+      ? await tx.product.update({ where: { id: existingProduct.id }, data: productData })
+      : await tx.product.create({ data: productData });
 
-    const draftMedia = await tx.media.findMany({
-      where: { draftId },
-      orderBy: {
-        sortOrder: "asc",
-      },
-    });
+    const draftMedia = await tx.media.findMany({ where: { draftId }, orderBy: { sortOrder: "asc" } });
 
-    await tx.media.deleteMany({
-      where: { productId: product.id },
-    });
+    await tx.media.deleteMany({ where: { productId: product.id } });
 
     if (draftMedia.length) {
       await tx.media.createMany({
@@ -646,10 +622,10 @@ async function reviewDraft(reviewerId, draftId, payload) {
       },
     });
 
-    return tx.product.findUnique({
-      where: { id: product.id },
-      include: productInclude,
-    });
+    // Remove the draft and its draft-media now that the product has been created
+    await tx.productDraft.delete({ where: { id: draftId } });
+
+    return tx.product.findUnique({ where: { id: product.id }, include: productInclude });
   });
 
   await createAuditLog({

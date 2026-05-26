@@ -855,6 +855,181 @@ async function reverifySample(sampleId, payload, actorId) {
   return updatedSample;
 }
 
+async function generateDashboardPdf(query) {
+  // gather the same data the UI uses; tolerate individual failures
+  const [overviewRes, revenueRes, ordersRes, auditRes] = await Promise.allSettled([
+    getDashboardOverview(query),
+    getDashboardRevenue(query),
+    getRecentOrders(query),
+    getAuditLogs(query),
+  ]);
+
+  const overview = overviewRes.status === 'fulfilled' ? overviewRes.value : null;
+  const revenue = revenueRes.status === 'fulfilled' ? revenueRes.value : null;
+  const orders = ordersRes.status === 'fulfilled' ? ordersRes.value : null;
+  const audit = auditRes.status === 'fulfilled' ? auditRes.value : null;
+
+  // small helpers for HTML composition
+  const esc = (s) => String(s ?? '—').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+  const renderKeyCountTable = (rows) => {
+    if (!Array.isArray(rows) || rows.length === 0) return `<p class="placeholder">No data</p>`;
+    return `
+      <table class="kv">
+        <thead><tr><th style="text-align:left">Name</th><th style="text-align:right">Count</th></tr></thead>
+        <tbody>
+          ${rows.map((r) => `<tr><td>${esc(r.key ?? r.name ?? r.status ?? '')}</td><td style="text-align:right">${Number(r.count ?? (r._count?._all ?? 0))}</td></tr>`).join('')}
+        </tbody>
+      </table>
+    `;
+  };
+
+  const makeBarSvg = (items, width = 600, height = 90) => {
+    if (!Array.isArray(items) || items.length === 0) return "<div class=\"placeholder\">No chart data</div>";
+    const values = items.map((i) => Math.max(0, Number(i.amount || 0)));
+    const max = Math.max(...values, 1);
+    const barW = Math.max(6, Math.floor(width / values.length));
+    const inner = items.map((it, idx) => {
+      const v = Number(it.amount || 0);
+      const h = Math.round((v / max) * (height - 20));
+      const x = idx * barW + 2;
+      const y = height - h - 10;
+      const label = esc(String((it.day || '').slice(5)));
+      return `<g><rect x="${x}" y="${y}" width="${barW - 4}" height="${h}" fill="#C6A75E"></rect><text x="${x + (barW - 4) / 2}" y="${height}" font-size="10" text-anchor="middle" fill="#444">${label}</text></g>`;
+    }).join('');
+    return `<svg width="${width}" height="${height + 10}" viewBox="0 0 ${width} ${height + 10}" xmlns="http://www.w3.org/2000/svg">${inner}</svg>`;
+  };
+
+  const buildOverviewHtml = (o) => {
+    if (!o) return `<p class="placeholder">Overview data not available</p>`;
+    const totalUsers = o.counts?.totalUsers ?? '—';
+    const activeArtisans = o.counts?.activeArtisans ?? '—';
+    const pendingSamples = o.counts?.pendingSamples ?? '—';
+    const revenueAmount = o.revenue?.amount ?? '—';
+    return `
+      <div class="summary">
+        <div class="card"><div class="label">Total users</div><div class="value">${esc(totalUsers)}</div></div>
+        <div class="card"><div class="label">Active artisans</div><div class="value">${esc(activeArtisans)}</div></div>
+        <div class="card"><div class="label">Pending samples</div><div class="value">${esc(pendingSamples)}</div></div>
+        <div class="card"><div class="label">Revenue (ETB)</div><div class="value">${typeof revenueAmount === 'number' ? 'ETB ' + revenueAmount.toLocaleString() : esc(revenueAmount)}</div></div>
+      </div>
+      <h3>Products by status</h3>
+      ${renderKeyCountTable(o.products ?? [])}
+      <h3>Drafts by status</h3>
+      ${renderKeyCountTable(o.drafts ?? [])}
+      <h3>Orders by status</h3>
+      ${renderKeyCountTable(o.orders ?? [])}
+    `;
+  };
+
+  const buildRevenueHtml = (r) => {
+    if (!r) return `<p class="placeholder">Revenue data not available</p>`;
+    const total = r.totals?.amount ?? r.amount ?? 0;
+    const payments = r.totals?.successfulPayments ?? r.successfulPayments ?? 0;
+    const byProvider = Array.isArray(r.byProvider) ? r.byProvider : [];
+    const byDay = Array.isArray(r.byDay) ? r.byDay : [];
+    return `
+      <div class="rev-summary"><div>Total: <strong>ETB ${Number(total).toLocaleString()}</strong></div><div>Payments: <strong>${Number(payments).toLocaleString()}</strong></div></div>
+      <h4>Revenue by provider</h4>
+      ${byProvider.length ? `<table class="kv"><thead><tr><th>Provider</th><th style="text-align:right">Amount</th><th style="text-align:right">Count</th></tr></thead><tbody>${byProvider.map((p) => `<tr><td>${esc(p.provider || p.name || '')}</td><td style="text-align:right">ETB ${Number(p.amount || 0).toLocaleString()}</td><td style="text-align:right">${Number(p.count || 0)}</td></tr>`).join('')}</tbody></table>` : '<p class="placeholder">No provider breakdown</p>'}
+      <h4>Revenue trend</h4>
+      ${makeBarSvg(byDay, 700, 90)}
+    `;
+  };
+
+  const buildOrdersHtml = (obj) => {
+    const items = obj?.items || obj?.rows || obj || [];
+    if (!Array.isArray(items) || items.length === 0) return `<p class="placeholder">Orders data not available</p>`;
+    const rowsHtml = items.slice(0, 50).map((it) => {
+      const id = it.id || it.orderId || it._id || '';
+      const name = it.customer ? `${it.customer.firstName || ''} ${it.customer.lastName || ''}`.trim() || it.customer.email : it.name || it.customerName || '';
+      const status = it.status || it.orderStatus || '';
+      const amount = it.totalAmount ?? it.amount ?? it.lineTotal ?? 0;
+      const date = it.createdAt ? (new Date(it.createdAt)).toISOString().slice(0,10) : (it.date || '');
+      const region = (it.shippingAddress && it.shippingAddress.region) || it.region || '';
+      return `<tr><td>${esc(id)}</td><td>${esc(name)}</td><td>${esc(status)}</td><td style="text-align:right">ETB ${Number(amount).toLocaleString()}</td><td>${esc(region)}</td><td>${esc(date)}</td></tr>`;
+    }).join('');
+    return `
+      <table class="full">
+        <thead><tr><th>Order ID</th><th>Customer</th><th>Status</th><th style="text-align:right">Amount</th><th>Region</th><th>Date</th></tr></thead>
+        <tbody>${rowsHtml}</tbody>
+      </table>
+    `;
+  };
+
+  const buildAuditHtml = (a) => {
+    const items = a?.items || a || [];
+    if (!Array.isArray(items) || items.length === 0) return `<p class="placeholder">Audit logs service unavailable</p>`;
+    const rows = items.slice(0, 100).map((log) => {
+      const ts = log.createdAt ? new Date(log.createdAt).toISOString().slice(0,10) : (log.date || '');
+      const actor = (log.actor && (log.actor.email || log.actor.name)) || log.actorId || 'system';
+      const action = log.action || (log.type || 'OTHER');
+      const entity = `${log.entityType || log.target || log.entity || ''} ${log.entityId || ''}`.trim();
+      const desc = log.description || (log.message || '');
+      const low = String(action).toLowerCase();
+      const cls = low.includes('delete') || String(desc).toLowerCase().includes('deleted') ? 'hl-delete' : low.includes('create') || low.includes('approve') || String(desc).toLowerCase().includes('approved') ? 'hl-create' : low.includes('update') ? 'hl-update' : '';
+      return `<tr class="${cls}"><td>${esc(ts)}</td><td>${esc(actor)}</td><td>${esc(action)}</td><td>${esc(entity)}</td><td>${esc(desc)}</td></tr>`;
+    }).join('');
+    return `
+      <table class="full">
+        <thead><tr><th>Date</th><th>Actor</th><th>Action</th><th>Entity</th><th>Description</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    `;
+  };
+
+  const now = new Date().toISOString();
+
+  const html = `<!doctype html><html><head><meta charset="utf-8"><title>EthioCraft Admin Report</title><style>
+    body{font-family:Inter,Arial,Helvetica,sans-serif;padding:24px;color:#111;background:#f6f6f4}
+    .header{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px}
+    h1{margin:0;font-size:20px}
+    h2{margin:8px 0 12px;font-size:16px;color:#111}
+    .section{margin-bottom:18px;padding:14px;border-radius:8px;border:1px solid #eee;background:#fff}
+    .placeholder{color:#b91c1c;font-weight:700}
+    .summary{display:flex;gap:12px;margin-bottom:12px}
+    .card{flex:1;padding:8px;border-radius:8px;background:#fafafa;border:1px solid #efefef}
+    .card .label{font-size:11px;color:#666}
+    .card .value{font-size:16px;font-weight:700;margin-top:6px}
+    table.kv{width:100%;border-collapse:collapse;margin-top:8px}
+    table.kv th, table.kv td{padding:6px 8px;border-bottom:1px solid #f0f0f0}
+    table.full{width:100%;border-collapse:collapse;margin-top:8px;font-size:12px}
+    table.full th, table.full td{padding:8px 10px;border-bottom:1px solid #eee}
+    .hl-delete{background:#fee2e2}
+    .hl-create{background:#ecfdf5}
+    .hl-update{background:#fffbeb}
+    pre{background:#f7f7f7;padding:10px;border-radius:6px;overflow:auto;white-space:pre-wrap;word-break:break-word}
+    .rev-summary{display:flex;gap:18px;margin-bottom:8px}
+    @media print{ body{background:#fff} .section{page-break-inside:avoid} }
+  </style></head><body>` +
+    `<div class="header"><h1>EthioCraft Admin Report</h1><div>${esc(now)}</div></div>` +
+    `<div class="section"><h2>Overview</h2>${buildOverviewHtml(overview)}</div>` +
+    `<div class="section"><h2>Revenue</h2>${buildRevenueHtml(revenue)}</div>` +
+    `<div class="section"><h2>Recent Orders</h2>${buildOrdersHtml(orders)}</div>` +
+    `<div class="section"><h2>Audit Logs</h2>${buildAuditHtml(audit)}</div>` +
+    `</body></html>`;
+
+  // render PDF using puppeteer
+  let browser = null;
+  try {
+    // lazy require to avoid loading unless needed
+    // eslint-disable-next-line global-require
+    const puppeteer = require('puppeteer');
+    browser = await puppeteer.launch({ args: ['--no-sandbox', '--disable-setuid-sandbox'] });
+    const page = await browser.newPage();
+    await page.setContent(html, { waitUntil: 'networkidle0' });
+    const buffer = await page.pdf({ format: 'A4', printBackground: true, margin: { top: '20px', bottom: '20px', left: '20px', right: '20px' } });
+    await page.close();
+    await browser.close();
+    return buffer;
+  } catch (e) {
+    if (browser) {
+      try { await browser.close(); } catch (_) {}
+    }
+    throw e;
+  }
+}
+
 module.exports = {
   getDashboardOverview,
   getDashboardRevenue,
@@ -881,4 +1056,5 @@ module.exports = {
   regenerateIntegrationKey,
   notifyUser,
   reverifySample,
+  generateDashboardPdf,
 };

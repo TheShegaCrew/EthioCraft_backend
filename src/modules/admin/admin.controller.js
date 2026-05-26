@@ -55,6 +55,17 @@ const getDashboardReports = asyncHandler(async (req, res) => {
   });
 });
 
+const getDashboardPdf = asyncHandler(async (req, res) => {
+  const buffer = await adminService.generateDashboardPdf(req.query);
+
+  res.setHeader("Content-Type", "application/pdf");
+  res.setHeader(
+    "Content-Disposition",
+    `attachment; filename="ethicraft-admin-report-${new Date().toISOString().slice(0,10)}.pdf"`,
+  );
+  res.status(200).send(buffer);
+});
+
 const getAuditLogs = asyncHandler(async (req, res) => {
   const data = await adminService.getAuditLogs(req.query);
 
@@ -225,6 +236,7 @@ module.exports = {
   getRecentOrders,
   getTopArtisans,
   getDashboardReports,
+  getDashboardPdf,
   getAuditLogs,
   getUsers,
   getUser,
