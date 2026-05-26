@@ -35,6 +35,10 @@ const submitBody = z.object({
   submissionNotes: z.string().trim().max(500).optional(),
 });
 
+const verifyDraftBody = z.object({
+  notes: z.string().trim().max(500).optional(),
+});
+
 const reviewBody = z.object({
   decision: z.enum(["APPROVE", "REJECT"]),
   notes: z.string().trim().max(500).optional(),
@@ -87,6 +91,7 @@ module.exports = {
     }),
   }),
   submitDraftSchema: z.object({ body: submitBody }),
+  verifyDraftSchema: z.object({ body: verifyDraftBody }),
   reviewDraftSchema: z.object({ body: reviewBody }),
   createSampleSchema: z.object({ body: createSampleBody }),
   updateSampleSchema: z.object({ body: sampleBody.optional() }),
