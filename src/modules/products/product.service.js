@@ -593,18 +593,40 @@ async function reviewDraft(reviewerId, draftId, payload) {
       where: { productId: product.id },
     });
 
-    if (draftMedia.length) {
+    const extensionMediaUrls = Array.isArray(draft.extensionData?.mediaFiles) ? draft.extensionData.mediaFiles : [];
+    let currentSortOrder = draftMedia.length > 0 ? Math.max(...draftMedia.map(m => m.sortOrder)) + 1 : 0;
+    
+    const extensionMediaData = extensionMediaUrls.map((url) => {
+      let kind = "IMAGE";
+      const ext = (url.split('.').pop() || '').toLowerCase();
+      if (['gltf', 'glb', 'obj', 'fbx', 'stl', 'ply', 'usdz'].includes(ext)) {
+        kind = "MODEL_3D";
+      } else if (['mp4', 'webm', 'ogg'].includes(ext)) {
+        kind = "VIDEO";
+      }
+      return {
+        ownerType: "PRODUCT",
+        kind: kind,
+        productId: product.id,
+        url: url,
+        sortOrder: currentSortOrder++,
+      };
+    });
+
+    const allMediaData = draftMedia.map((media) => ({
+      ownerType: "PRODUCT",
+      kind: media.kind,
+      productId: product.id,
+      url: media.url,
+      mimeType: media.mimeType,
+      size: media.size,
+      altText: media.altText,
+      sortOrder: media.sortOrder,
+    })).concat(extensionMediaData);
+
+    if (allMediaData.length) {
       await tx.media.createMany({
-        data: draftMedia.map((media) => ({
-          ownerType: "PRODUCT",
-          kind: media.kind,
-          productId: product.id,
-          url: media.url,
-          mimeType: media.mimeType,
-          size: media.size,
-          altText: media.altText,
-          sortOrder: media.sortOrder,
-        })),
+        data: allMediaData,
       });
     }
 

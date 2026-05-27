@@ -6,3 +6,4 @@ coverage
 .DS_Store
 uploads/products/*
 !uploads/products/.gitkeep
+prisma/seed.js
