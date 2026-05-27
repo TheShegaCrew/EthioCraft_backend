@@ -137,6 +137,27 @@ const createUserSchema = z.object({
     password: z.string().min(8),
     phone: z.string().optional(),
     role: z.enum(["CUSTOMER", "ARTISAN", "ADMIN", "VERIFICATION_AGENT"]),
+    address: z.object({
+      label: z.string().optional(),
+      recipientName: z.string().min(1).max(120).optional(),
+      phone: z.string().min(1).max(30).optional(),
+      region: z.string().min(1).max(120),
+      city: z.string().min(1).max(120),
+      subCity: z.string().optional(),
+      woreda: z.string().optional(),
+      kebele: z.string().optional(),
+      line1: z.string().min(1).max(255),
+      line2: z.string().optional(),
+      postalCode: z.string().optional(),
+    }).optional(),
+  }).superRefine((data, ctx) => {
+    if (data.address && !data.phone && !data.address.phone) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["address", "phone"],
+        message: "Phone is required when address is provided.",
+      });
+    }
   }),
 });
 

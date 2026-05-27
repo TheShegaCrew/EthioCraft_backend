@@ -645,6 +645,7 @@ async function createUser(payload, actorId) {
   }
 
   const passwordHash = await bcrypt.hash(payload.password, 12);
+  const fullName = `${payload.firstName || ""} ${payload.lastName || ""}`.trim();
 
   const newUser = await prisma.user.create({
     data: {
@@ -655,6 +656,24 @@ async function createUser(payload, actorId) {
       passwordHash,
       role: payload.role,
       status: "ACTIVE",
+      addresses: payload.address
+        ? {
+            create: {
+              label: payload.address.label || "Primary",
+              recipientName: payload.address.recipientName || fullName || payload.email,
+              phone: payload.address.phone || payload.phone,
+              region: payload.address.region,
+              city: payload.address.city,
+              subCity: payload.address.subCity || null,
+              woreda: payload.address.woreda || null,
+              kebele: payload.address.kebele || null,
+              line1: payload.address.line1,
+              line2: payload.address.line2 || null,
+              postalCode: payload.address.postalCode || null,
+              isDefault: true,
+            },
+          }
+        : undefined,
     },
   });
 
@@ -664,7 +683,7 @@ async function createUser(payload, actorId) {
     entityType: "USER",
     entityId: newUser.id,
     description: `Admin created new user with role ${payload.role}`,
-    metadata: { email: payload.email, role: payload.role },
+    metadata: { email: payload.email, role: payload.role, hasAddress: Boolean(payload.address) },
   });
 
   return newUser;
